@@ -2,7 +2,7 @@
  * Raspberry Pi emulation (c) 2012 Gregory Estrade
  * Upstreaming code cleanup [including bcm2835_*] (c) 2013 Jan Petrous
  *
- * Rasperry Pi 2 emulation Copyright (c) 2015, Microsoft
+ * Rasperry Pi 2-3 emulation Copyright (c) 2015, Microsoft
  * Written by Andrew Baumann
  *
  * This code is licensed under the GNU GPLv2 and later.
@@ -25,7 +25,7 @@
 #define FIRMWARE_ADDR   0x8000 /* Pi loads kernel.img here by default */
 
 /* Table of Linux board IDs for different Pi versions */
-static const int raspi_boardid[] = {[1] = 0xc42, [2] = 0xc43};
+static const int raspi_boardid[] = {[1] = 0xc42, [2] = 0xc43, [3] = 0xc44};
 
 typedef struct RasPiState {
     BCM2836State soc;
@@ -84,7 +84,7 @@ static void setup_boot(MachineState *machine, int version, size_t ram_size)
     binfo.secure_boot = true;
 
     /* Pi2 requires SMP setup */
-    if (version == 2) {
+    if ((version == 2) || (version == 3)) {
         binfo.smp_loader_start = SMPBOOT_ADDR;
         binfo.write_secondary_boot = write_smpboot;
         binfo.secondary_cpu_reset_hook = reset_secondary;
@@ -158,6 +158,51 @@ static void raspi2_init(MachineState *machine)
     setup_boot(machine, 2, machine->ram_size - vcram_size);
 }
 
+static void raspi3_init(MachineState *machine)
+{
+    RasPiState *s = g_new0(RasPiState, 1);
+    uint32_t vcram_size;
+    DriveInfo *di;
+    BlockBackend *blk;
+    BusState *bus;
+    DeviceState *carddev;
+
+    object_initialize(&s->soc, sizeof(s->soc), TYPE_BCM2837);
+    object_property_add_child(OBJECT(machine), "soc", OBJECT(&s->soc),
+                              &error_abort);
+
+    /* Allocate and map RAM */
+    memory_region_allocate_system_memory(&s->ram, OBJECT(machine), "ram",
+                                         machine->ram_size);
+    /* FIXME: Remove when we have custom CPU address space support */
+    memory_region_add_subregion_overlap(get_system_memory(), 0, &s->ram, 0);
+
+    /* Setup the SOC */
+    object_property_add_const_link(OBJECT(&s->soc), "ram", OBJECT(&s->ram),
+                                   &error_abort);
+    object_property_set_int(OBJECT(&s->soc), smp_cpus, "enabled-cpus",
+                            &error_abort);
+    object_property_set_int(OBJECT(&s->soc), 0xa32081, "board-rev",
+                            &error_abort);
+    object_property_set_bool(OBJECT(&s->soc), true, "realized", &error_abort);
+
+    /* Create and plug in the SD cards */
+    di = drive_get_next(IF_SD);
+    blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    bus = qdev_get_child_bus(DEVICE(&s->soc), "sd-bus");
+    if (bus == NULL) {
+        error_report("No SD bus found in SOC object");
+        exit(1);
+    }
+    carddev = qdev_create(bus, TYPE_SD_CARD);
+    qdev_prop_set_drive(carddev, "drive", blk, &error_fatal);
+    object_property_set_bool(OBJECT(carddev), true, "realized", &error_fatal);
+
+    vcram_size = object_property_get_uint(OBJECT(&s->soc), "vcram-size",
+                                          &error_abort);
+    setup_boot(machine, 3, machine->ram_size - vcram_size);
+}
+
 static void raspi2_machine_init(MachineClass *mc)
 {
     mc->desc = "Raspberry Pi 2";
@@ -169,4 +214,16 @@ static void raspi2_machine_init(MachineClass *mc)
     mc->max_cpus = BCM2836_NCPUS;
     mc->default_ram_size = 1024 * 1024 * 1024;
 };
+static void raspi3_machine_init(MachineClass *mc)
+{
+    mc->desc = "Raspberry Pi 3";
+    mc->init = raspi3_init;
+    mc->block_default_type = IF_SD;
+    mc->no_parallel = 1;
+    mc->no_floppy = 1;
+    mc->no_cdrom = 1;
+    mc->max_cpus = BCM2836_NCPUS;
+    mc->default_ram_size = 1024 * 1024 * 1024;
+};
 DEFINE_MACHINE("raspi2", raspi2_machine_init)
+DEFINE_MACHINE("raspi3", raspi3_machine_init)

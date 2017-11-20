@@ -16,7 +16,9 @@
 #include "hw/intc/bcm2836_control.h"
 
 #define TYPE_BCM2836 "bcm2836"
+#define TYPE_BCM2837 "bcm2837"
 #define BCM2836(obj) OBJECT_CHECK(BCM2836State, (obj), TYPE_BCM2836)
+#define BCM2837(obj) OBJECT_CHECK(BCM2836State, (obj), TYPE_BCM2837)
 
 #define BCM2836_NCPUS 4
 
