@@ -499,7 +499,6 @@ static void arm_cpu_initfn(Object *obj)
     } else {
         qdev_init_gpio_in(DEVICE(cpu), arm_cpu_set_irq, 4);
     }
-
     cpu->gt_timer[GTIMER_PHYS] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,
                                                 arm_gt_ptimer_cb, cpu);
     cpu->gt_timer[GTIMER_VIRT] = timer_new(QEMU_CLOCK_VIRTUAL, GTIMER_SCALE,

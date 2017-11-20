@@ -132,6 +132,7 @@ static void disas_set_insn_syndrome(DisasContext *s, uint32_t syn)
 #define DISAS_EXC 6
 /* WFE */
 #define DISAS_WFE 7
+#define DISAS_SEV 13
 #define DISAS_HVC 8
 #define DISAS_SMC 9
 #define DISAS_YIELD 10

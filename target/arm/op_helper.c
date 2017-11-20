@@ -445,6 +445,18 @@ void HELPER(wfe)(CPUARMState *env)
     HELPER(yield)(env);
 }
 
+void HELPER(sev)(CPUARMState *env)
+{
+    ARMCPU *cpu = arm_env_get_cpu(env);
+    CPUState *cs0 = CPU(cpu), *cs = cs0;
+
+    CPU_FOREACH(cs) {
+        if (cs->halted) {
+            qemu_cond_signal(cs->halt_cond);
+        }
+    }
+}
+
 void HELPER(yield)(CPUARMState *env)
 {
     ARMCPU *cpu = arm_env_get_cpu(env);
