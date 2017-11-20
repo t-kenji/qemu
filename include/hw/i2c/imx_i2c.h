@@ -26,6 +26,12 @@
 #define TYPE_IMX_I2C "imx.i2c"
 #define IMX_I2C(obj) OBJECT_CHECK(IMXI2CState, (obj), TYPE_IMX_I2C)
 
+#define TYPE_VF610_I2C "vf610.i2c"
+#define VF610_I2C(obj) OBJECT_CHECK(IMXI2CState, (obj), TYPE_VF610_I2C)
+
+#define IMX_I2C_REGSHIFT           0
+#define VF610_I2C_REGSHIFT         2
+
 #define IMX_I2C_MEM_SIZE           0x14
 
 /* i.MX I2C memory map */
@@ -74,7 +80,9 @@ typedef struct IMXI2CState {
     I2CBus *bus;
     qemu_irq irq;
 
-    uint16_t  address;
+    uint16_t address;
+    int it_shift;
+    int it_read;
 
     uint16_t iadr;
     uint16_t ifdr;

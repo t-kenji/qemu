@@ -1420,7 +1420,7 @@ static void handle_hint(DisasContext *s, uint32_t insn,
         return;
     case 4: /* SEV */
     case 5: /* SEVL */
-        /* we treat all as NOP at least for now */
+        s->base.is_jmp = DISAS_SEV;
         return;
     default:
         /* default specified as NOP equivalent */
@@ -13932,6 +13932,11 @@ static void aarch64_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
         case DISAS_WFE:
             gen_a64_set_pc_im(dc->pc);
             gen_helper_wfe(cpu_env);
+            break;
+        case DISAS_SEV:
+            gen_a64_set_pc_im(dc->pc);
+            gen_helper_sev(cpu_env);
+            tcg_gen_exit_tb(NULL, 0);
             break;
         case DISAS_YIELD:
             gen_a64_set_pc_im(dc->pc);

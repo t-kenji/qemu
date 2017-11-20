@@ -1,7 +1,7 @@
 /*
- *  i.MX I2C Bus Serial Interface Emulation
+ *  LS1 I2C Bus Serial Interface Emulation
  *
- *  Copyright (C) 2013 Jean-Christophe Dubois. <jcd@tribudubois.net>
+ *  Copyright (C) 2017 t-kenji <protect.2501@gmail.com>
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the
@@ -19,57 +19,63 @@
  */
 
 #include "qemu/osdep.h"
-#include "hw/i2c/imx_i2c.h"
+#include "hw/i2c/ls1_i2c.h"
 #include "hw/i2c/i2c.h"
 #include "qemu/log.h"
 
-#ifndef DEBUG_IMX_I2C
-#define DEBUG_IMX_I2C 0
+#ifndef DEBUG_LS1_I2C
+#define DEBUG_LS1_I2C 1
 #endif
 
 #define DPRINTF(fmt, args...) \
     do { \
-        if (DEBUG_IMX_I2C) { \
-            fprintf(stderr, "[%s]%s: " fmt , TYPE_IMX_I2C, \
+        if (DEBUG_LS1_I2C) { \
+            fprintf(stderr, "[%s]%s: " fmt , TYPE_LS1_I2C, \
                                              __func__, ##args); \
         } \
     } while (0)
 
-static const char *imx_i2c_get_regname(unsigned offset)
+static const char *ls1_i2c_get_regname(unsigned offset)
 {
     switch (offset) {
-    case IADR_ADDR:
-        return "IADR";
-    case IFDR_ADDR:
-        return "IFDR";
-    case I2CR_ADDR:
-        return "I2CR";
-    case I2SR_ADDR:
-        return "I2SR";
-    case I2DR_ADDR:
-        return "I2DR";
+    case IBAD_ADDR:
+        return "IBAD";
+    case IBFD_ADDR:
+        return "IBFD";
+    case IBCR_ADDR:
+        return "IBCR";
+    case IBSR_ADDR:
+        return "IBSR";
+    case IBDR_ADDR:
+        return "IBDR";
+    case IBIC_ADDR:
+        return "IBIC";
+    case IBDBG_ADDR:
+        return "IBDBG";
     default:
         return "[?]";
     }
 }
 
-static inline bool imx_i2c_is_enabled(IMXI2CState *s)
+static inline bool ls1_i2c_is_enabled(LS1I2CState *s)
 {
-    return s->i2cr & I2CR_IEN;
+    return s->ibcr & I2CR_IEN;
 }
 
-static inline bool imx_i2c_interrupt_is_enabled(IMXI2CState *s)
+static inline bool ls1_i2c_interrupt_is_enabled(LS1I2CState *s)
 {
     return s->i2cr & I2CR_IIEN;
 }
 
-static inline bool imx_i2c_is_master(IMXI2CState *s)
+static inline bool ls1_i2c_is_master(LS1I2CState *s)
 {
     return s->i2cr & I2CR_MSTA;
 }
 
-static void common_i2c_reset(IMXI2CState *s)
+static void ls1_i2c_reset(DeviceState *dev)
 {
+    LS1I2CState *s = LS1_I2C(dev);
+
     if (s->address != ADDR_RESET) {
         i2c_end_transfer(s->bus);
     }
@@ -83,22 +89,23 @@ static void common_i2c_reset(IMXI2CState *s)
     s->i2dr_write = I2DR_RESET;
 }
 
-static inline void imx_i2c_raise_interrupt(IMXI2CState *s)
+static inline void ls1_i2c_raise_interrupt(LS1I2CState *s)
 {
     /*
      * raise an interrupt if the device is enabled and it is configured
      * to generate some interrupts.
      */
-    if (imx_i2c_is_enabled(s) && imx_i2c_interrupt_is_enabled(s)) {
+    if (ls1_i2c_is_enabled(s) && ls1_i2c_interrupt_is_enabled(s)) {
         s->i2sr |= I2SR_IIF;
         qemu_irq_raise(s->irq);
     }
 }
 
-static uint64_t common_i2c_read(IMXI2CState *s, hwaddr offset,
+static uint64_t ls1_i2c_read(void *opaque, hwaddr offset,
                              unsigned size)
 {
     uint16_t value;
+    LS1I2CState *s = LS1_I2C(opaque);
 
     switch (offset) {
     case IADR_ADDR:
@@ -116,26 +123,26 @@ static uint64_t common_i2c_read(IMXI2CState *s, hwaddr offset,
     case I2DR_ADDR:
         value = s->i2dr_read;
 
-        if (imx_i2c_is_master(s)) {
+        if (ls1_i2c_is_master(s)) {
             int ret = 0xff;
 
             if (s->address == ADDR_RESET) {
                 /* something is wrong as the address is not set */
                 qemu_log_mask(LOG_GUEST_ERROR, "[%s]%s: Trying to read "
                               "without specifying the slave address\n",
-                              TYPE_IMX_I2C, __func__);
+                              TYPE_LS1_I2C, __func__);
             } else if (s->i2cr & I2CR_MTX) {
                 qemu_log_mask(LOG_GUEST_ERROR, "[%s]%s: Trying to read "
-                              "but MTX is set\n", TYPE_IMX_I2C, __func__);
+                              "but MTX is set\n", TYPE_LS1_I2C, __func__);
             } else {
                 /* get the next byte */
                 ret = i2c_recv(s->bus);
 
                 if (ret >= 0) {
-                    imx_i2c_raise_interrupt(s);
+                    ls1_i2c_raise_interrupt(s);
                 } else {
                     qemu_log_mask(LOG_GUEST_ERROR, "[%s]%s: read failed "
-                                  "for device 0x%02x\n", TYPE_IMX_I2C,
+                                  "for device 0x%02x\n", TYPE_LS1_I2C,
                                   __func__, s->address);
                     ret = 0xff;
                 }
@@ -144,28 +151,29 @@ static uint64_t common_i2c_read(IMXI2CState *s, hwaddr offset,
             s->i2dr_read = ret;
         } else {
             qemu_log_mask(LOG_UNIMP, "[%s]%s: slave mode not implemented\n",
-                          TYPE_IMX_I2C, __func__);
+                          TYPE_LS1_I2C, __func__);
         }
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR, "[%s]%s: Bad address at offset 0x%"
-                      HWADDR_PRIx "\n", TYPE_IMX_I2C, __func__, offset);
+                      HWADDR_PRIx "\n", TYPE_LS1_I2C, __func__, offset);
         value = 0;
         break;
     }
 
     DPRINTF("read %s [0x%" HWADDR_PRIx "] -> 0x%02x\n",
-            imx_i2c_get_regname(offset), offset, value);
+            ls1_i2c_get_regname(offset), offset, value);
 
     return (uint64_t)value;
 }
 
-static void common_i2c_write(IMXI2CState *s, hwaddr offset,
-                             uint64_t value, unsigned size)
+static void ls1_i2c_write(void *opaque, hwaddr offset,
+                          uint64_t value, unsigned size)
 {
+    LS1I2CState *s = LS1_I2C(opaque);
+
     DPRINTF("write %s [0x%" HWADDR_PRIx "] <- 0x%02x\n",
-            imx_i2c_get_regname(offset), offset,
-            (int)value);
+            ls1_i2c_get_regname(offset), offset, (int)value);
 
     value &= 0xff;
 
@@ -178,15 +186,15 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
         s->ifdr = value & IFDR_MASK;
         break;
     case I2CR_ADDR:
-        if (imx_i2c_is_enabled(s) && ((value & I2CR_IEN) == 0)) {
+        if (ls1_i2c_is_enabled(s) && ((value & I2CR_IEN) == 0)) {
             /* This is a soft reset. IADR is preserved during soft resets */
             uint16_t iadr = s->iadr;
-            common_i2c_reset(s);
+            ls1_i2c_reset(DEVICE(s));
             s->iadr = iadr;
         } else { /* normal write */
             s->i2cr = value & I2CR_MASK;
 
-            if (imx_i2c_is_master(s)) {
+            if (ls1_i2c_is_master(s)) {
                 /* set the bus to busy */
                 s->i2sr |= I2SR_IBB;
             } else { /* slave mode */
@@ -198,10 +206,6 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
                  * transfer if any
                  */
                 if (s->address != ADDR_RESET) {
-                    if (s->it_read) {
-                        i2c_nack(s->bus);
-                        s->it_read = 0;
-                    }
                     i2c_end_transfer(s->bus);
                     s->address = ADDR_RESET;
                 }
@@ -210,6 +214,7 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
             if (s->i2cr & I2CR_RSTA) { /* Restart */
                 /* if this is a restart then it ends the ongoing transfer */
                 if (s->address != ADDR_RESET) {
+                    i2c_end_transfer(s->bus);
                     s->address = ADDR_RESET;
                     s->i2cr &= ~I2CR_RSTA;
                 }
@@ -225,9 +230,6 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
             s->i2sr &= ~I2SR_IIF;
             qemu_irq_lower(s->irq);
         }
-        if (value & I2SR_IIF) {
-            s->i2cr |= I2CR_IEN | I2CR_IIEN;
-        }
 
         /*
          * if the user writes 0 to IAL, reset the bit
@@ -239,24 +241,23 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
         break;
     case I2DR_ADDR:
         /* if the device is not enabled, nothing to do */
-        if (!imx_i2c_is_enabled(s)) {
+        if (!ls1_i2c_is_enabled(s)) {
             break;
         }
 
         s->i2dr_write = value & I2DR_MASK;
 
-        if (imx_i2c_is_master(s)) {
+        if (ls1_i2c_is_master(s)) {
             /* If this is the first write cycle then it is the slave addr */
             if (s->address == ADDR_RESET) {
-                s->it_read = extract32(s->i2dr_write, 0, 1);
                 if (i2c_start_transfer(s->bus, extract32(s->i2dr_write, 1, 7),
-                                       s->it_read)) {
+                                       extract32(s->i2dr_write, 0, 1))) {
                     /* if non zero is returned, the address is not valid */
                     s->i2sr |= I2SR_RXAK;
                 } else {
                     s->address = s->i2dr_write;
                     s->i2sr &= ~I2SR_RXAK;
-                    imx_i2c_raise_interrupt(s);
+                    ls1_i2c_raise_interrupt(s);
                 }
             } else { /* This is a normal data write */
                 if (i2c_send(s->bus, s->i2dr_write)) {
@@ -266,174 +267,78 @@ static void common_i2c_write(IMXI2CState *s, hwaddr offset,
                     i2c_end_transfer(s->bus);
                 } else {
                     s->i2sr &= ~I2SR_RXAK;
-                    imx_i2c_raise_interrupt(s);
+                    ls1_i2c_raise_interrupt(s);
                 }
             }
         } else {
             qemu_log_mask(LOG_UNIMP, "[%s]%s: slave mode not implemented\n",
-                          TYPE_IMX_I2C, __func__);
+                          TYPE_LS1_I2C, __func__);
         }
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR, "[%s]%s: Bad address at offset 0x%"
-                      HWADDR_PRIx "\n", TYPE_IMX_I2C, __func__, offset);
+                      HWADDR_PRIx "\n", TYPE_LS1_I2C, __func__, offset);
         break;
     }
 }
 
-static uint64_t imx_i2c_read(void *opaque, hwaddr offset,
-                             unsigned size)
-{
-    IMXI2CState *s = IMX_I2C(opaque);
-    return common_i2c_read(s, offset << s->it_shift, size);
-}
-
-static void imx_i2c_write(void *opaque, hwaddr offset,
-                          uint64_t value, unsigned size)
-{
-    IMXI2CState *s = IMX_I2C(opaque);
-    common_i2c_write(s, offset << s->it_shift, value, size);
-}
-
-static const MemoryRegionOps imx_i2c_ops = {
-    .read = imx_i2c_read,
-    .write = imx_i2c_write,
+static const MemoryRegionOps ls1_i2c_ops = {
+    .read = ls1_i2c_read,
+    .write = ls1_i2c_write,
     .valid.min_access_size = 1,
     .valid.max_access_size = 2,
     .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static const VMStateDescription imx_i2c_vmstate = {
-    .name = TYPE_IMX_I2C,
+static const VMStateDescription ls1_i2c_vmstate = {
+    .name = TYPE_LS1_I2C,
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]) {
-        VMSTATE_UINT16(address, IMXI2CState),
-        VMSTATE_UINT16(iadr, IMXI2CState),
-        VMSTATE_UINT16(ifdr, IMXI2CState),
-        VMSTATE_UINT16(i2cr, IMXI2CState),
-        VMSTATE_UINT16(i2sr, IMXI2CState),
-        VMSTATE_UINT16(i2dr_read, IMXI2CState),
-        VMSTATE_UINT16(i2dr_write, IMXI2CState),
+        VMSTATE_UINT16(address, LS1I2CState),
+        VMSTATE_UINT16(ibad, LS1I2CState),
+        VMSTATE_UINT16(ibfd, LS1I2CState),
+        VMSTATE_UINT16(ibcr, LS1I2CState),
+        VMSTATE_UINT16(ibsr, LS1I2CState),
+        VMSTATE_UINT16(ibdr_read, LS1I2CState),
+        VMSTATE_UINT16(ibdr_write, LS1I2CState),
+        VMSTATE_UINT16(ibic, LS1I2CState),
+        VMSTATE_UINT16(ibdbg, LS1I2CState),
         VMSTATE_END_OF_LIST()
     }
 };
 
-static void imx_i2c_reset(DeviceState *dev)
+static void ls1_i2c_realize(DeviceState *dev, Error **errp)
 {
-    common_i2c_reset(IMX_I2C(dev));
-}
+    LS1I2CState *s = LS1_I2C(dev);
 
-static void imx_i2c_realize(DeviceState *dev, Error **errp)
-{
-    IMXI2CState *s = IMX_I2C(dev);
-
-    memory_region_init_io(&s->iomem, OBJECT(s), &imx_i2c_ops, s,
-                          TYPE_IMX_I2C, IMX_I2C_MEM_SIZE);
+    memory_region_init_io(&s->iomem, OBJECT(s), &ls1_i2c_ops, s, TYPE_LS1_I2C,
+                          LS1_I2C_MEM_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
     sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
     s->bus = i2c_init_bus(DEVICE(dev), NULL);
-    s->it_shift = IMX_I2C_REGSHIFT;
 }
 
-static void imx_i2c_class_init(ObjectClass *klass, void *data)
+static void ls1_i2c_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
 
-    dc->vmsd = &imx_i2c_vmstate;
-    dc->reset = imx_i2c_reset;
-    dc->realize = imx_i2c_realize;
-    dc->desc = "i.MX I2C Controller";
+    dc->vmsd = &ls1_i2c_vmstate;
+    dc->reset = ls1_i2c_reset;
+    dc->realize = ls1_i2c_realize;
+    dc->desc = "LS1 I2C Controller";
 }
 
-static const TypeInfo imx_i2c_type_info = {
-    .name = TYPE_IMX_I2C,
+static const TypeInfo ls1_i2c_type_info = {
+    .name = TYPE_LS1_I2C,
     .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(IMXI2CState),
-    .class_init = imx_i2c_class_init,
+    .instance_size = sizeof(LS1I2CState),
+    .class_init = ls1_i2c_class_init,
 };
 
-static void imx_i2c_register_types(void)
+static void ls1_i2c_register_types(void)
 {
-    type_register_static(&imx_i2c_type_info);
+    type_register_static(&ls1_i2c_type_info);
 }
 
-static uint64_t vf610_i2c_read(void *opaque, hwaddr offset,
-                               unsigned size)
-{
-    IMXI2CState *s = VF610_I2C(opaque);
-    return common_i2c_read(s, offset << s->it_shift, size);
-}
-
-static void vf610_i2c_write(void *opaque, hwaddr offset,
-                            uint64_t value, unsigned size)
-{
-    IMXI2CState *s = VF610_I2C(opaque);
-    common_i2c_write(s, offset << s->it_shift, value, size);
-}
-
-static const MemoryRegionOps vf610_i2c_ops = {
-    .read = vf610_i2c_read,
-    .write = vf610_i2c_write,
-    .valid.min_access_size = 1,
-    .valid.max_access_size = 2,
-    .endianness = DEVICE_NATIVE_ENDIAN,
-};
-
-static const VMStateDescription vf610_i2c_vmstate = {
-    .name = TYPE_VF610_I2C,
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .fields = (VMStateField[]) {
-        VMSTATE_UINT16(address, IMXI2CState),
-        VMSTATE_UINT16(iadr, IMXI2CState),
-        VMSTATE_UINT16(ifdr, IMXI2CState),
-        VMSTATE_UINT16(i2cr, IMXI2CState),
-        VMSTATE_UINT16(i2sr, IMXI2CState),
-        VMSTATE_UINT16(i2dr_read, IMXI2CState),
-        VMSTATE_UINT16(i2dr_write, IMXI2CState),
-        VMSTATE_END_OF_LIST()
-    }
-};
-
-static void vf610_i2c_reset(DeviceState *dev)
-{
-    common_i2c_reset(VF610_I2C(dev));
-}
-
-static void vf610_i2c_realize(DeviceState *dev, Error **errp)
-{
-    IMXI2CState *s = VF610_I2C(dev);
-
-    memory_region_init_io(&s->iomem, OBJECT(s), &vf610_i2c_ops, s,
-                          TYPE_VF610_I2C, IMX_I2C_MEM_SIZE);
-    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
-    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
-    s->bus = i2c_init_bus(DEVICE(dev), NULL);
-    s->it_shift = VF610_I2C_REGSHIFT;
-}
-
-static void vf610_i2c_class_init(ObjectClass *klass, void *data)
-{
-    DeviceClass *dc = DEVICE_CLASS(klass);
-
-    dc->vmsd = &vf610_i2c_vmstate;
-    dc->reset = vf610_i2c_reset;
-    dc->realize = vf610_i2c_realize;
-    dc->desc = "VF610 I2C Controller";
-}
-
-static const TypeInfo vf610_i2c_type_info = {
-    .name = TYPE_VF610_I2C,
-    .parent = TYPE_SYS_BUS_DEVICE,
-    .instance_size = sizeof(IMXI2CState),
-    .class_init = vf610_i2c_class_init,
-};
-
-static void vf610_i2c_register_types(void)
-{
-    type_register_static(&vf610_i2c_type_info);
-}
-
-type_init(imx_i2c_register_types)
-type_init(vf610_i2c_register_types)
+type_init(ls1_i2c_register_types)
