@@ -25,16 +25,16 @@
 #include "sysemu/sysemu.h"
 #include "sysemu/qtest.h"
 
-struct CsrQuatro5530 {
-    struct CsrQuatroState soc;
+typedef struct {
+    CsrQuatroState soc;
     MemoryRegion ram;
-};
+} CsrQuatro5530;
 
 static void quatro5530_init(MachineState *machine)
 {
     static struct arm_boot_info binfo;
 
-    struct CsrQuatro5530 *ms = g_new0(struct CsrQuatro5530, 1);
+    CsrQuatro5530 *ms = g_new0(CsrQuatro5530, 1);
 
     /* Create the memory region to pass to the SoC */
     if (machine->ram_size > CSR_QUATRO_MAX_RAM_SIZE) {

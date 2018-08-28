@@ -25,7 +25,7 @@
 
 static void csr_quatro_init(Object *obj)
 {
-    struct CsrQuatroState *ms = CSR_QUATRO(obj);
+    CsrQuatroState *ms = CSR_QUATRO(obj);
     int num_mpus = MIN(smp_cpus, CSR_QUATRO_NUM_MPU_CPUS);
 
     object_initialize_child(obj, "mpu-cpus[*]",
@@ -43,11 +43,15 @@ static void csr_quatro_init(Object *obj)
     sysbus_init_child_obj(obj, "a7mpcore",
                           &ms->a7mpcore, sizeof(ms->a7mpcore),
                           TYPE_A15MPCORE_PRIV);
+
+    sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
+    sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
+    sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
 }
 
 static void csr_quatro_realize(DeviceState *dev, Error **errp)
 {
-    struct CsrQuatroState *ms = CSR_QUATRO(dev);
+    CsrQuatroState *ms = CSR_QUATRO(dev);
     int num_mpus = MIN(smp_cpus, CSR_QUATRO_NUM_MPU_CPUS);
 
     for (int i = 0; i < num_mpus; ++i) {
@@ -117,7 +121,7 @@ static void csr_quatro_register_types(void)
     static const TypeInfo tinfo = {
         .name = TYPE_CSR_QUATRO,
         .parent = TYPE_DEVICE,
-        .instance_size = sizeof(struct CsrQuatroState),
+        .instance_size = sizeof(CsrQuatroState),
         .instance_init = csr_quatro_init,
         .class_init = csr_quatro_class_init,
     };

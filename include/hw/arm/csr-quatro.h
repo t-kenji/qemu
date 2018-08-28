@@ -36,7 +36,7 @@
 #endif
 
 #define TYPE_CSR_QUATRO "csr,quatro-5500"
-#define CSR_QUATRO(obj) OBJECT_CHECK(struct CsrQuatroState, \
+#define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
                                      (obj), TYPE_CSR_QUATRO)
 
 enum CsrQuatroConfiguration {
@@ -49,6 +49,11 @@ enum CsrQuatroConfiguration {
 enum CsrQuatroMemoryMap {
     CSR_QUATRO_DDR_RAM_ADDR = 0x80000000,
     CSR_QUATRO_MAX_RAM_SIZE = (2 * 1024UL * 1024UL * 1024UL),
+
+    CSR_QUATRO_RSTGEN_ADDR = 0x04010000,
+    CSR_QUATRO_CLK_ADDR = 0x04020000,
+    CSR_QUATRO_HRT0_ADDR = 0x04040010,
+    CSR_QUATRO_HRT1_ADDR = 0x04040020,
 
     CSR_QUATRO_UART0_ADDR = 0x040B0010,
     CSR_QUATRO_UART1_ADDR = 0x04160010,
@@ -65,7 +70,7 @@ enum CsrQuatroInterrupts {
     CSR_QUATRO_GIC_NUM_SPI_INTR = 160
 };
 
-struct CsrQuatroState {
+typedef struct {
     /*< private >*/
     DeviceState parent_obj;
 
@@ -73,6 +78,6 @@ struct CsrQuatroState {
     ARMCPU mpu_cpus[CSR_QUATRO_NUM_MPU_CPUS];
     ARMCPU mcu_cpus[CSR_QUATRO_NUM_MCU_CPUS];
     A15MPPrivState a7mpcore;
-};
+} CsrQuatroState;
 
 #endif /* __CSR_QUATRO_5500_H__ */
