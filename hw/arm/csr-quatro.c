@@ -44,6 +44,7 @@ static void csr_quatro_init(Object *obj)
                           &ms->a7mpcore, sizeof(ms->a7mpcore),
                           TYPE_A15MPCORE_PRIV);
 
+    sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
     sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
     sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
     sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
@@ -79,6 +80,11 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
                              true, "realized",
                              &error_abort);
     sysbus_mmio_map(sbd, 0, CSR_QUATRO_A7MPCORE_ADDR);
+
+    memory_region_init_ram(&ms->sram, OBJECT(dev), "quatro5500.sram",
+                           CSR_QUATRO_SRAM_SIZE, &error_abort);
+    memory_region_add_subregion(get_system_memory(), CSR_QUATRO_SRAM_ADDR,
+                                &ms->sram);
 
     /* Connect the CPUs to the GIC. */
     for (int i = 0; i < num_mpus; ++i) {

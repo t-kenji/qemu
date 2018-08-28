@@ -37,9 +37,9 @@ static void quatro5530_init(MachineState *machine)
     CsrQuatro5530 *ms = g_new0(CsrQuatro5530, 1);
 
     /* Create the memory region to pass to the SoC */
-    if (machine->ram_size > CSR_QUATRO_MAX_RAM_SIZE) {
+    if (machine->ram_size > CSR_QUATRO_DDR_RAM_SIZE) {
         error_report("ERROR: RAM size " RAM_ADDR_FMT " above max supported of 0x%08x",
-                     machine->ram_size, CSR_QUATRO_MAX_RAM_SIZE);
+                     machine->ram_size, CSR_QUATRO_DDR_RAM_SIZE);
         exit(1);
     }
 

@@ -39,6 +39,9 @@
 #define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
                                      (obj), TYPE_CSR_QUATRO)
 
+#define MiB(n) ((n) * 1024UL * 1024UL)
+#define GiB(n) ((n) * 1024UL * 1024UL * 1024UL)
+
 enum CsrQuatroConfiguration {
     CSR_QUATRO_NUM_MPU_CPUS = 3,
     CSR_QUATRO_NUM_MCU_CPUS = 2,
@@ -47,19 +50,22 @@ enum CsrQuatroConfiguration {
 };
 
 enum CsrQuatroMemoryMap {
-    CSR_QUATRO_DDR_RAM_ADDR = 0x80000000,
-    CSR_QUATRO_MAX_RAM_SIZE = (2 * 1024UL * 1024UL * 1024UL),
+    CSR_QUATRO_DDR_RAM_ADDR  = 0x80000000,
+    CSR_QUATRO_DDR_RAM_SIZE  = GiB(2),
 
-    CSR_QUATRO_RSTGEN_ADDR = 0x04010000,
-    CSR_QUATRO_CLK_ADDR = 0x04020000,
-    CSR_QUATRO_HRT0_ADDR = 0x04040010,
-    CSR_QUATRO_HRT1_ADDR = 0x04040020,
+    CSR_QUATRO_RSTGEN_ADDR   = 0x04010000,
+    CSR_QUATRO_CLK_ADDR      = 0x04020000,
+    CSR_QUATRO_HRT0_ADDR     = 0x04040010,
+    CSR_QUATRO_HRT1_ADDR     = 0x04040020,
 
-    CSR_QUATRO_UART0_ADDR = 0x040B0010,
-    CSR_QUATRO_UART1_ADDR = 0x04160010,
-    CSR_QUATRO_UART2_ADDR = 0x052C0010,
+    CSR_QUATRO_UART0_ADDR    = 0x040B0010,
+    CSR_QUATRO_UART1_ADDR    = 0x04160010,
+    CSR_QUATRO_UART2_ADDR    = 0x052C0010,
 
     CSR_QUATRO_A7MPCORE_ADDR = 0x04300000,
+    CSR_QUATRO_A15GPF_ADDR   = 0x043B0000,
+    CSR_QUATRO_SRAM_ADDR     = 0x05400000,
+    CSR_QUATRO_SRAM_SIZE     = MiB(2),
 };
 
 enum CsrQuatroInterrupts {
@@ -67,7 +73,7 @@ enum CsrQuatroInterrupts {
     CSR_QUATRO_UART1_IRQ = 29,
     CSR_QUATRO_UART2_IRQ = 137,
 
-    CSR_QUATRO_GIC_NUM_SPI_INTR = 160
+    CSR_QUATRO_GIC_NUM_SPI_INTR = 192
 };
 
 typedef struct {
@@ -78,6 +84,7 @@ typedef struct {
     ARMCPU mpu_cpus[CSR_QUATRO_NUM_MPU_CPUS];
     ARMCPU mcu_cpus[CSR_QUATRO_NUM_MCU_CPUS];
     A15MPPrivState a7mpcore;
+    MemoryRegion sram;
 } CsrQuatroState;
 
 #endif /* __CSR_QUATRO_5500_H__ */
