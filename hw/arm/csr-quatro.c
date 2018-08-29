@@ -18,8 +18,10 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #include "hw/arm/csr-quatro.h"
-#include "hw/ide/ahci.h"
 #include "hw/char/serial.h"
+#include "hw/ide/ahci.h"
+#include "hw/usb/hcd-ehci.h"
+#include "hw/sd/sdhci.h"
 #include "exec/address-spaces.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
@@ -49,7 +51,13 @@ static void csr_quatro_init(Object *obj)
     sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
     sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
     sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
+    sysbus_create_simple("quatro5500.rtc", CSR_QUATRO_RTC_ADDR, NULL);
     sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
+    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI0_ADDR, NULL);
+    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI1_ADDR, NULL);
+    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI2_ADDR, NULL);
+    sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
+    sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, NULL);
     sysbus_create_simple(TYPE_SYSBUS_AHCI, CSR_QUATRO_SATA_ADDR, NULL);
 }
 

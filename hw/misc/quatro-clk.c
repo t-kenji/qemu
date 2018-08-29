@@ -93,27 +93,10 @@ static void quatro_clk_write(void *opaque, hwaddr offset, uint64_t value, unsign
     qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n", TYPE_QUATRO_CLK, offset);
 }
 
-static void quatro_clk_init(Object *obj)
-{
-    static const MemoryRegionOps ops = {
-        .read       = quatro_clk_read,
-        .write      = quatro_clk_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
-    };
-
-    qemu_log("%s:%d:%s$ trace\n", __FILE__, __LINE__, __func__);
-    QuatroClkState *s = QUATRO_CLK(obj);
-
-    memory_region_init_io(&s->iomem, obj, &ops, s, TYPE_QUATRO_CLK,
-                          QUATRO_CLK_MMIO_SIZE);
-    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
-}
-
 static void quatro_clk_reset(DeviceState *dev)
 {
     QuatroClkState *s = QUATRO_CLK(dev);
 
-    qemu_log("%s:%d:%s$ trace\n", __FILE__, __LINE__, __func__);
     for (int i = 0; i < QUATRO_CLK_NUM_REGS; ++i) {
         s->regs[i] = quatro_clk_regs[i].reset_value;
     }
@@ -121,7 +104,17 @@ static void quatro_clk_reset(DeviceState *dev)
 
 static void quatro_clk_realize(DeviceState *dev, Error **errp)
 {
-    qemu_log("%s:%d:%s$ trace\n", __FILE__, __LINE__, __func__);
+    static const MemoryRegionOps ops = {
+        .read       = quatro_clk_read,
+        .write      = quatro_clk_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+    };
+
+    QuatroClkState *s = QUATRO_CLK(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s, TYPE_QUATRO_CLK,
+                          QUATRO_CLK_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 }
 
 static void quatro_clk_class_init(ObjectClass *oc, void *data)
@@ -130,7 +123,6 @@ static void quatro_clk_class_init(ObjectClass *oc, void *data)
         DEFINE_PROP_END_OF_LIST()
     };
 
-    qemu_log("%s:%d:%s$ trace\n", __FILE__, __LINE__, __func__);
     DeviceClass *dc = DEVICE_CLASS(oc);
 
     dc->realize = quatro_clk_realize;
@@ -145,7 +137,6 @@ static void quatro_clk_register_type(void)
         .name          = TYPE_QUATRO_CLK,
         .parent        = TYPE_SYS_BUS_DEVICE,
         .instance_size = sizeof(QuatroClkState),
-        .instance_init = quatro_clk_init,
         .class_init    = quatro_clk_class_init,
     };
 
