@@ -24,9 +24,13 @@
 #define TYPE_QUATRO_RSTGEN "quatro5500.rstgen"
 #define QUATRO_RSTGEN(obj) OBJECT_CHECK(QuatroRstGenState, (obj), TYPE_QUATRO_RSTGEN)
 
+#define TYPE_QUATRO_DDRMC "quatro5500.ddrmc"
+#define QUATRO_DDRMC(obj) OBJECT_CHECK(QuatroDDRMCState, (obj), TYPE_QUATRO_DDRMC)
+
 enum QuatroPeripheralMemoryMap {
     QUATRO_PERI_A15GPF_MMIO_SIZE = 0x10000,
     QUATRO_PERI_RSTGEN_MMIO_SIZE = 0x10000,
+    QUATRO_PERI_DDRMC_MMIO_SIZE  = 0x10000,
 };
 
 typedef struct {
@@ -48,6 +52,12 @@ static const QuatroPeriReg quatro_rstgen_regs[] = {
 
 #define QUATRO_RSTGEN_NUM_REGS ARRAY_SIZE(quatro_rstgen_regs)
 
+static const QuatroPeriReg quatro_ddrmc_regs[] = {
+    {"EXT_ADDR_MODE",       0x4880, 0x00000000},
+};
+
+#define QUATRO_DDRMC_NUM_REGS ARRAY_SIZE(quatro_ddrmc_regs)
+
 typedef struct {
     /*< private >*/
     SysBusDevice parent_obj;
@@ -65,6 +75,15 @@ typedef struct {
     MemoryRegion iomem;
     uint32_t regs[QUATRO_RSTGEN_NUM_REGS];
 } QuatroRstGenState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+    uint32_t regs[QUATRO_DDRMC_NUM_REGS];
+} QuatroDDRMCState;
 
 static const VMStateDescription quatro_a15gpf_vmstate = {
     .name               = TYPE_QUATRO_A15GPF,

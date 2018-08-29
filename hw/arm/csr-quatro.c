@@ -18,10 +18,12 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #include "hw/arm/csr-quatro.h"
+#include "hw/ide/ahci.h"
 #include "hw/char/serial.h"
 #include "exec/address-spaces.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
+#include "qemu/log.h"
 
 static void csr_quatro_init(Object *obj)
 {
@@ -48,6 +50,7 @@ static void csr_quatro_init(Object *obj)
     sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
     sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
     sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
+    sysbus_create_simple(TYPE_SYSBUS_AHCI, CSR_QUATRO_SATA_ADDR, NULL);
 }
 
 static void csr_quatro_realize(DeviceState *dev, Error **errp)
@@ -98,12 +101,21 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
 
     /* UARTs.
      */
-    if (serial_hd(0)) {
-        serial_mm_init(get_system_memory(),
-                       CSR_QUATRO_UART0_ADDR, 0,
-                       qdev_get_gpio_in(DEVICE(&ms->a7mpcore),
-                                        CSR_QUATRO_UART0_IRQ),
-                       115200, serial_hd(0), DEVICE_LITTLE_ENDIAN);
+    for (int i = 0; i < CSR_QUATRO_NUM_UARTS; ++i) {
+        static const struct {
+            hwaddr addr;
+            int irq;
+        } uarts[] = {
+            {CSR_QUATRO_UART0_ADDR, CSR_QUATRO_UART0_IRQ},
+            {CSR_QUATRO_UART1_ADDR, CSR_QUATRO_UART1_IRQ},
+            {CSR_QUATRO_UART2_ADDR, CSR_QUATRO_UART2_IRQ},
+        };
+        if (serial_hd(i)) {
+            serial_mm_init(get_system_memory(),
+                           uarts[i].addr, 0,
+                           qdev_get_gpio_in(DEVICE(&ms->a7mpcore), uarts[i].irq),
+                           115200, serial_hd(i), DEVICE_LITTLE_ENDIAN);
+        }
     }
 }
 
