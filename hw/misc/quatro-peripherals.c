@@ -105,6 +105,16 @@ static const VMStateDescription quatro_rstgen_vmstate = {
     },
 };
 
+static const VMStateDescription quatro_ddrmc_vmstate = {
+    .name               = TYPE_QUATRO_DDRMC,
+    .version_id         = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_UINT32_ARRAY(regs, QuatroDDRMCState, QUATRO_DDRMC_NUM_REGS),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
 static uint64_t quatro_a15gpf_read(void *opaque, hwaddr offset, unsigned size)
 {
     const QuatroA15gpfState *s = QUATRO_A15GPF(opaque);
@@ -219,6 +229,63 @@ static void quatro_rstgen_class_init(ObjectClass *oc, void *data)
     dc->vmsd    = &quatro_rstgen_vmstate;
 }
 
+static uint64_t quatro_ddrmc_read(void *opaque, hwaddr offset, unsigned size)
+{
+    const QuatroDDRMCState *s = QUATRO_DDRMC(opaque);
+
+    for (int i = 0; i < QUATRO_DDRMC_NUM_REGS; ++i) {
+        const QuatroPeriReg *reg = &quatro_ddrmc_regs[i];
+        if (reg->offset == offset) {
+            qemu_log("%s: read offset 0x%" HWADDR_PRIx ", value: 0x%" PRIx32 "\n", TYPE_QUATRO_DDRMC, offset, s->regs[i]);
+            return s->regs[i];
+        }
+    }
+
+    qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
+             TYPE_QUATRO_DDRMC, offset);
+
+    return 0;
+}
+
+static void quatro_ddrmc_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+             TYPE_QUATRO_DDRMC, offset);
+}
+
+static void quatro_ddrmc_reset(DeviceState *dev)
+{
+    QuatroDDRMCState *s = QUATRO_DDRMC(dev);
+
+    for (int i = 0; i < QUATRO_DDRMC_NUM_REGS; ++i) {
+        s->regs[i] = quatro_ddrmc_regs[i].reset_value;
+    }
+}
+
+static void quatro_ddrmc_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read       = quatro_ddrmc_read,
+        .write      = quatro_ddrmc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroDDRMCState *s = QUATRO_DDRMC(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_DDRMC, QUATRO_PERI_DDRMC_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_ddrmc_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_ddrmc_realize;
+    dc->reset   = quatro_ddrmc_reset;
+    dc->vmsd    = &quatro_ddrmc_vmstate;
+}
+
 static void quatro_peripherals_register_types(void)
 {
     static const TypeInfo a15gpf_tinfo = {
@@ -233,9 +300,16 @@ static void quatro_peripherals_register_types(void)
         .instance_size = sizeof(QuatroRstGenState),
         .class_init    = quatro_rstgen_class_init,
     };
+    static const TypeInfo ddrmc_tinfo = {
+        .name          = TYPE_QUATRO_DDRMC,
+        .parent        = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroDDRMCState),
+        .class_init    = quatro_ddrmc_class_init,
+    };
 
     type_register_static(&a15gpf_tinfo);
     type_register_static(&rstgen_tinfo);
+    type_register_static(&ddrmc_tinfo);
 }
 
 type_init(quatro_peripherals_register_types)
