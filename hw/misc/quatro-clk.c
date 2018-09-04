@@ -55,6 +55,7 @@ enum QuatroClkRegs {
 
 #define REG_ITEM(index, offset, reset_value) \
     [index] = {#index, offset, reset_value}
+
 static const QuatroClkReg quatro_clk_regs[] = {
     REG_ITEM(SYSPLL_DIV12_0,    0x0018, 0x00000000),
     REG_ITEM(SYSPLL_DIV12_1,    0x001C, 0x00000000),
@@ -65,6 +66,7 @@ static const QuatroClkReg quatro_clk_regs[] = {
     REG_ITEM(SYSCG_CLKDIVCTRL0, 0x0458, 0x00000001),
     REG_ITEM(SYSCG_CLKDIVCTRL1, 0x045C, 0x00000001),
 };
+
 #undef REG_ITEM
 
 typedef struct {
@@ -149,7 +151,6 @@ static void quatro_clk_write(void *opaque, hwaddr offset, uint64_t value, unsign
                  TYPE_QUATRO_CLK, offset);
         return;
     }
-
     qemu_log("%s: write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
              TYPE_QUATRO_CLK, value, offset);
 }
