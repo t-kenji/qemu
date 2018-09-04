@@ -18,6 +18,9 @@
 #include "qapi/error.h"
 #include "cpu.h"
 #include "hw/arm/csr-quatro.h"
+#include "hw/sysbus.h"
+#include "hw/sd/sdhci.h"
+#include "hw/sd/sd.h"
 #include "hw/boards.h"
 #include "qemu/error-report.h"
 #include "qemu/log.h"
@@ -59,6 +62,32 @@ static void quatro5530_init(MachineState *machine)
     object_property_set_bool(OBJECT(&ms->soc), true, "realized",
                              &error_fatal);
 
+    /*** SD/MMC host controllers ***/
+    for (int i = 0; i < CSR_QUATRO_NUM_SDHCIS; ++i) {
+        static const struct {
+            hwaddr offset;
+            int irq;
+        } sdhcis[] = {
+            {CSR_QUATRO_SDHCI0_ADDR, CSR_QUATRO_SDIO0_IRQ},
+            {CSR_QUATRO_SDHCI1_ADDR, CSR_QUATRO_SDIO1_IRQ},
+            {CSR_QUATRO_SDHCI2_ADDR, CSR_QUATRO_SDIO1_IRQ},
+        };
+
+        DeviceState *dev = qdev_create(NULL, TYPE_SYSBUS_SDHCI);
+        //qdev_prop_set_uint64(dev, "capareg", 0x05E934B4);
+        qdev_init_nofail(dev);
+
+        sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, sdhcis[i].offset);
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                           qdev_get_gpio_in(DEVICE(&ms->soc.a7mpcore), sdhcis[i].irq));
+
+        DriveInfo *di = drive_get_next(IF_SD);
+        BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+        DeviceState *carddev = qdev_create(qdev_get_child_bus(dev, "sd-bus"), TYPE_SD_CARD);
+        qdev_prop_set_drive(carddev, "drive", blk, &error_abort);
+        qdev_init_nofail(carddev);
+    }
+
     memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",
                                          machine->ram_size);
     memory_region_add_subregion(get_system_memory(),
@@ -75,6 +104,8 @@ static void quatro5530_machine_class_init(MachineClass *mc)
     mc->init = quatro5530_init;
     mc->max_cpus = CSR_QUATRO_NUM_MPU_CPUS + CSR_QUATRO_NUM_MCU_CPUS;
     mc->default_cpus = CSR_QUATRO_NUM_MPU_CPUS;
+    mc->default_ram_size = GiB(1);
+    mc->block_default_type = IF_SD;
 }
 
 DEFINE_MACHINE("quatro5530", quatro5530_machine_class_init)

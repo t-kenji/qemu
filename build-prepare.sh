@@ -70,6 +70,7 @@ $ROOTDIR/configure \\
     --enable-debug \\
     --enable-debug-tcg \\
     --enable-debug-info \\
+    --enable-trace-backend=log \\
     --enable-fdt \\
     --enable-virtfs \\
     --enable-attr \\

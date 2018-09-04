@@ -21,7 +21,6 @@
 #include "hw/char/serial.h"
 #include "hw/ide/ahci.h"
 #include "hw/usb/hcd-ehci.h"
-#include "hw/sd/sdhci.h"
 #include "exec/address-spaces.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
@@ -43,23 +42,11 @@ static void csr_quatro_init(Object *obj)
                                 &error_abort, NULL);
     }
 
-    /* Cortex-A7 MP Core */
+    /* Cortex-A7 MP Core.
+     */
     sysbus_init_child_obj(obj, "a7mpcore",
                           &ms->a7mpcore, sizeof(ms->a7mpcore),
                           TYPE_A15MPCORE_PRIV);
-
-    sysbus_create_simple("quatro5500.ddrmc", CSR_QUATRO_DDRMC_ADDR, NULL);
-    sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
-    sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
-    sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
-    sysbus_create_simple("quatro5500.rtc", CSR_QUATRO_RTC_ADDR, NULL);
-    sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
-    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI0_ADDR, NULL);
-    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI1_ADDR, NULL);
-    sysbus_create_simple(TYPE_SYSBUS_SDHCI, CSR_QUATRO_SDHCI2_ADDR, NULL);
-    sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
-    sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, NULL);
-    sysbus_create_simple(TYPE_SYSBUS_AHCI, CSR_QUATRO_SATA_ADDR, NULL);
 }
 
 static void csr_quatro_realize(DeviceState *dev, Error **errp)
@@ -107,6 +94,19 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
         sysbus_connect_irq(sbd, i + num_mpus,
                            qdev_get_gpio_in(cpu, ARM_CPU_FIQ));
     }
+
+    sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
+    sysbus_create_simple("quatro5500.clk", CSR_QUATRO_CLK_ADDR, NULL);
+    sysbus_create_simple("quatro5500.rtc", CSR_QUATRO_RTC_ADDR, NULL);
+    sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.sdmclk", CSR_QUATRO_SDMCLK_ADDR, NULL);
+    sysbus_create_simple("quatro5500.ddrmc", CSR_QUATRO_DDRMC_ADDR, NULL);
+    sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
+    sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO1_ADDR, NULL);
+    sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
+    sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, NULL);
+    sysbus_create_simple(TYPE_SYSBUS_AHCI, CSR_QUATRO_SATA_ADDR, NULL);
 
     /* UARTs.
      */
