@@ -20,20 +20,6 @@
 #include "qemu-common.h"
 #include "hw/arm/arm.h"
 #include "hw/cpu/a15mpcore.h"
-#if 0
-#include "hw/intc/arm_gic.h"
-#include "hw/net/cadence_gem.h"
-#include "hw/char/cadence_uart.h"
-#include "hw/ide/pci.h"
-#include "hw/ide/ahci.h"
-#include "hw/sd/sdhci.h"
-#include "hw/ssi/xilinx_spips.h"
-#include "hw/dma/xlnx_dpdma.h"
-#include "hw/dma/xlnx-zdma.h"
-#include "hw/display/xlnx_dp.h"
-#include "hw/intc/xlnx-zynqmp-ipi.h"
-#include "hw/timer/xlnx-zynqmp-rtc.h"
-#endif
 
 #define TYPE_CSR_QUATRO "csr,quatro-5500"
 #define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
