@@ -1,5 +1,5 @@
 /*
- *  CSR Quatro 5500 High-resolution timer
+ *  CSR Quatro 5500 Clocks emulation
  *
  *  Copyright (C) 2018 t-kenji <protect.2501@gmail.com>
  *
@@ -15,15 +15,36 @@
  */
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
-#include "hw/ptimer.h"
-#include "qemu/main-loop.h"
+#include "qemu/timer.h"
+#include "qemu/bitops.h"
 #include "qemu/log.h"
+
+#define TYPE_QUATRO_CLK "quatro5500.clk"
+#define QUATRO_CLK(obj) OBJECT_CHECK(QuatroClkState, (obj), TYPE_QUATRO_CLK)
 
 #define TYPE_QUATRO_RTC "quatro5500.rtc"
 #define QUATRO_RTC(obj) OBJECT_CHECK(QuatroRTCState, (obj), TYPE_QUATRO_RTC)
 
 #define TYPE_QUATRO_HRT0 "quatro5500.hrt0"
 #define QUATRO_HRT0(obj) OBJECT_CHECK(QuatroHRT0State, (obj), TYPE_QUATRO_HRT0)
+
+enum QuatroTimerMemoryMap {
+    QUATRO_CLK_MMIO_SIZE  = 0x10000,
+    QUATRO_RTC_MMIO_SIZE  = 0x20,
+    QUATRO_HRT0_MMIO_SIZE = 0x10,
+};
+
+enum QuatroClkSysPLLValues {
+    SYSPLL_OUTPUT_FREQ = 2400000000,
+    HED_CLOCK          = 300000000,
+    SYSPLL_DIVIDER     = (SYSPLL_OUTPUT_FREQ / HED_CLOCK) - 1,
+};
+
+enum QuatroClkSysCGValues {
+    CLKSTATSW1_SYS_IS_MUX_CLK  = 0x00040000,
+    CLKSTATSW1_SYS_IS_LP_CLK   = 0x00020000,
+    CLKSTATSW1_SYS_IS_XIN0_CLK = 0x00010000,
+};
 
 enum QuatroHRT0Values {
     HRT_STOP  = 0x00000000,
@@ -39,6 +60,30 @@ typedef struct {
 
 #define REG_ITEM(index, offset, reset_value) \
     [index] = {#index, (offset), (reset_value)}
+
+enum QuatroClkRegs {
+    SYSPLL_DIV12_0,
+    SYSPLL_DIV12_1,
+    SYSPLL_DIV12_2,
+    SYSPLL_DIV12_3,
+    SYSCG_CLKSTATSW1,
+    SYSCG_CLKMUXCTRL1,
+    SYSCG_CLKDIVCTRL0,
+    SYSCG_CLKDIVCTRL1,
+
+    QUATRO_CLK_NUM_REGS
+};
+
+static const QuatroTimerReg quatro_clk_regs[] = {
+    REG_ITEM(SYSPLL_DIV12_0,    0x0018, 0x00000000),
+    REG_ITEM(SYSPLL_DIV12_1,    0x001C, 0x00000000),
+    REG_ITEM(SYSPLL_DIV12_2,    0x0020, 0x00000000),
+    REG_ITEM(SYSPLL_DIV12_3,    0x0024, SYSPLL_DIVIDER),
+    REG_ITEM(SYSCG_CLKSTATSW1,  0x0414, CLKSTATSW1_SYS_IS_MUX_CLK),
+    REG_ITEM(SYSCG_CLKMUXCTRL1, 0x0430, 0x00000003),
+    REG_ITEM(SYSCG_CLKDIVCTRL0, 0x0458, 0x00000001),
+    REG_ITEM(SYSCG_CLKDIVCTRL1, 0x045C, 0x00000001),
+};
 
 enum QuatroRTCRegs {
     CNT,
@@ -74,6 +119,15 @@ typedef struct {
 
     /*< public >*/
     MemoryRegion iomem;
+    uint32_t regs[QUATRO_CLK_NUM_REGS];
+} QuatroClkState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
     uint32_t regs[QUATRO_RTC_NUM_REGS];
 } QuatroRTCState;
 
@@ -83,9 +137,19 @@ typedef struct {
 
     /*< public >*/
     MemoryRegion iomem;
-    ptimer_state *timer;
+    uint64_t counter_offset;
     uint32_t regs[QUATRO_HRT0_NUM_REGS];
 } QuatroHRT0State;
+
+static const VMStateDescription quatro_clk_vmstate = {
+    .name = TYPE_QUATRO_CLK,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_UINT32_ARRAY(regs, QuatroClkState, QUATRO_CLK_NUM_REGS),
+        VMSTATE_END_OF_LIST()
+    },
+};
 
 static const VMStateDescription quatro_rtc_vmstate = {
     .name = TYPE_QUATRO_RTC,
@@ -102,11 +166,16 @@ static const VMStateDescription quatro_hrt0_vmstate = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
-        VMSTATE_PTIMER(timer, QuatroHRT0State),
+        VMSTATE_UINT64(counter_offset, QuatroHRT0State),
         VMSTATE_UINT32_ARRAY(regs, QuatroHRT0State, QUATRO_HRT0_NUM_REGS),
         VMSTATE_END_OF_LIST()
     },
 };
+
+static inline int64_t quatro_sec_to_nsec(int64_t sec)
+{
+    return sec * 1000000000;
+}
 
 static int quatro_timer_offset_to_index(const QuatroTimerReg *regs,
                                         int length,
@@ -118,6 +187,106 @@ static int quatro_timer_offset_to_index(const QuatroTimerReg *regs,
         }
     }
     return -1;
+}
+
+static uint64_t quatro_hrt_get_count(QuatroHRT0State *s)
+{
+    return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)
+           / (quatro_sec_to_nsec(1) / HED_CLOCK);
+}
+
+static uint64_t quatro_clk_read(void *opaque, hwaddr offset, unsigned size)
+{
+    const QuatroClkState *s = QUATRO_CLK(opaque);
+    int index = quatro_timer_offset_to_index(quatro_clk_regs,
+                                             QUATRO_CLK_NUM_REGS,
+                                             offset);
+
+    if (index < 0) {
+        qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
+                 TYPE_QUATRO_CLK, offset);
+        return 0;
+    }
+
+    uint64_t value = s->regs[index];
+    qemu_log("%s: read 0x%" PRIx64 " from offset 0x%" HWADDR_PRIx "\n",
+             TYPE_QUATRO_CLK, value, offset);
+    return value;
+}
+
+static void quatro_clk_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    QuatroClkState *s = QUATRO_CLK(opaque);
+    int index = quatro_timer_offset_to_index(quatro_clk_regs,
+                                             QUATRO_CLK_NUM_REGS,
+                                             offset);
+
+    switch (index) {
+    case SYSPLL_DIV12_0:
+        s->regs[SYSPLL_DIV12_0] = (uint32_t)value;
+        break;
+    case SYSPLL_DIV12_1:
+        s->regs[SYSPLL_DIV12_1] = (uint32_t)value;
+        break;
+    case SYSPLL_DIV12_2:
+        s->regs[SYSPLL_DIV12_2] = (uint32_t)value;
+        break;
+    case SYSPLL_DIV12_3:
+        s->regs[SYSPLL_DIV12_3] = (uint32_t)value;
+        break;
+    case SYSCG_CLKSTATSW1:
+        s->regs[SYSCG_CLKSTATSW1] = (uint32_t)value;
+        break;
+    case SYSCG_CLKMUXCTRL1:
+        s->regs[SYSCG_CLKMUXCTRL1] = (uint32_t)value;
+        break;
+    case SYSCG_CLKDIVCTRL0:
+        s->regs[SYSCG_CLKDIVCTRL0] = (uint32_t)value;
+        break;
+    case SYSCG_CLKDIVCTRL1:
+        s->regs[SYSCG_CLKDIVCTRL1] = (uint32_t)value;
+        break;
+    default:
+        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+                 TYPE_QUATRO_CLK, offset);
+        return;
+    }
+    qemu_log("%s: write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
+             TYPE_QUATRO_CLK, value, offset);
+}
+
+static void quatro_clk_reset(DeviceState *dev)
+{
+    QuatroClkState *s = QUATRO_CLK(dev);
+
+    for (int i = 0; i < QUATRO_CLK_NUM_REGS; ++i) {
+        s->regs[i] = quatro_clk_regs[i].reset_value;
+    }
+}
+
+static void quatro_clk_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_clk_read,
+        .write = quatro_clk_write,
+        .endianness = DEVICE_NATIVE_ENDIAN,
+    };
+
+    QuatroClkState *s = QUATRO_CLK(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s, TYPE_QUATRO_CLK,
+                          QUATRO_CLK_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_clk_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->desc = "CSR Quatro 5500 Clock Control register";
+    dc->realize = quatro_clk_realize;
+    dc->reset = quatro_clk_reset;
+    dc->vmsd = &quatro_clk_vmstate;
 }
 
 static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
@@ -181,8 +350,8 @@ static void quatro_rtc_realize(DeviceState *dev, Error **errp)
 
     QuatroRTCState *s = QUATRO_RTC(dev);
 
-    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
-                          TYPE_QUATRO_RTC, 0x20);
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s, TYPE_QUATRO_RTC,
+                          QUATRO_RTC_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 }
 
@@ -210,15 +379,16 @@ static uint64_t quatro_hrt0_read(void *opaque, hwaddr offset, unsigned size)
     }
 
     switch (index) {
-    case HRTCNT0H ... HRTCNT0L:
-        s->regs[index] = ptimer_get_count(s->timer)
-                         >> ((index == HRTCNT0H) ? 32 : 0)
-                         & 0x00000000FFFFFFFF;
+    case HRTCNT0H ... HRTCNT0L: {
+            uint64_t counter = quatro_hrt_get_count(s) - s->counter_offset;
+            s->regs[HRTCNT0H] = (uint32_t)extract64(counter, 32, 32);
+            s->regs[HRTCNT0L] = (uint32_t)extract64(counter, 0, 32);
+        }
         break;
     }
     uint64_t value = s->regs[index];
-    qemu_log("%s: read 0x%" PRIX64 " from offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_HRT0, value, offset);
+    //qemu_log("%s: read 0x%" PRIX64 " from offset 0x%" HWADDR_PRIx "\n",
+    //         TYPE_QUATRO_HRT0, value, offset);
     return value;
 }
 
@@ -246,14 +416,12 @@ static void quatro_hrt0_write(void *opaque,
         s->regs[HRTCTL0] = (uint32_t)value;
         switch (value) {
         case HRT_STOP:
-            ptimer_stop(s->timer);
             break;
         case HRT_CLEAR:
-            ptimer_set_count(s->timer, 0xFFFFFFFFF);
-            ptimer_set_limit(s->timer, 0xFFFFFFFFF, 1);
+            s->regs[HRTCNT0H] = s->regs[HRTCNT0L] = 0;
             break;
         case HRT_START:
-            ptimer_run(s->timer, 0);
+            s->counter_offset = quatro_hrt_get_count(s);
             break;
         default:
             qemu_log("%s: Bad write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
@@ -274,7 +442,7 @@ static void quatro_hrt0_reset(DeviceState *dev)
 {
     QuatroHRT0State *s = QUATRO_HRT0(dev);
 
-    ptimer_stop(s->timer);
+    s->counter_offset = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
     for (int i = 0; i < QUATRO_HRT0_NUM_REGS; ++i) {
         s->regs[i] = quatro_hrt0_regs[i].reset_value;
     }
@@ -290,12 +458,8 @@ static void quatro_hrt0_realize(DeviceState *dev, Error **errp)
 
     QuatroHRT0State *s = QUATRO_HRT0(dev);
 
-    s->timer = ptimer_init(NULL, PTIMER_POLICY_DEFAULT);
-    /* FIXME: frequency setup so let it always run at 1 KHz */
-    ptimer_set_freq(s->timer, 1 * 1000);
-
-    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
-                          TYPE_QUATRO_HRT0, 0x10);
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s, TYPE_QUATRO_HRT0,
+                          QUATRO_HRT0_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 }
 
@@ -309,23 +473,30 @@ static void quatro_hrt0_class_init(ObjectClass *oc, void *data)
     dc->vmsd    = &quatro_hrt0_vmstate;
 }
 
-static void quatro_hrt0_register_types(void)
+static void quatro_timer_register_types(void)
 {
+    static const TypeInfo clk_tinfo = {
+        .name = TYPE_QUATRO_CLK,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroClkState),
+        .class_init = quatro_clk_class_init,
+    };
     static const TypeInfo rtc_tinfo = {
-        .name          = TYPE_QUATRO_RTC,
-        .parent        = TYPE_SYS_BUS_DEVICE,
+        .name = TYPE_QUATRO_RTC,
+        .parent = TYPE_SYS_BUS_DEVICE,
         .instance_size = sizeof(QuatroRTCState),
-        .class_init    = quatro_rtc_class_init,
+        .class_init = quatro_rtc_class_init,
     };
     static const TypeInfo hrt0_tinfo = {
-        .name          = TYPE_QUATRO_HRT0,
-        .parent        = TYPE_SYS_BUS_DEVICE,
+        .name = TYPE_QUATRO_HRT0,
+        .parent = TYPE_SYS_BUS_DEVICE,
         .instance_size = sizeof(QuatroHRT0State),
-        .class_init    = quatro_hrt0_class_init,
+        .class_init = quatro_hrt0_class_init,
     };
 
+    type_register_static(&clk_tinfo);
     type_register_static(&rtc_tinfo);
     type_register_static(&hrt0_tinfo);
 }
 
-type_init(quatro_hrt0_register_types)
+type_init(quatro_timer_register_types)
