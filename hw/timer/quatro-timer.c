@@ -25,6 +25,12 @@
 #define TYPE_QUATRO_HRT0 "quatro5500.hrt0"
 #define QUATRO_HRT0(obj) OBJECT_CHECK(QuatroHRT0State, (obj), TYPE_QUATRO_HRT0)
 
+enum QuatroHRT0Values {
+    HRT_STOP  = 0x00000000,
+    HRT_CLEAR = 0x00000001,
+    HRT_START = 0x00000002,
+};
+
 typedef struct {
     const char *name;
     hwaddr offset;
@@ -203,8 +209,16 @@ static uint64_t quatro_hrt0_read(void *opaque, hwaddr offset, unsigned size)
         return 0;
     }
 
+    switch (index) {
+    case HRTCNT0H ... HRTCNT0L:
+        s->regs[index] = ptimer_get_count(s->timer)
+                         >> ((index == HRTCNT0H) ? 32 : 0)
+                         & 0x00000000FFFFFFFF;
+        break;
+    }
     uint64_t value = s->regs[index];
-    //qemu_log("%s: read offset 0x%" HWADDR_PRIx ", value: 0x%" PRIx32 "\n", TYPE_QUATRO_HRT0, offset, s->regs[i]);
+    qemu_log("%s: read 0x%" PRIX64 " from offset 0x%" HWADDR_PRIx "\n",
+             TYPE_QUATRO_HRT0, value, offset);
     return value;
 }
 
@@ -230,6 +244,22 @@ static void quatro_hrt0_write(void *opaque,
         break;
     case HRTCTL0:
         s->regs[HRTCTL0] = (uint32_t)value;
+        switch (value) {
+        case HRT_STOP:
+            ptimer_stop(s->timer);
+            break;
+        case HRT_CLEAR:
+            ptimer_set_count(s->timer, 0xFFFFFFFFF);
+            ptimer_set_limit(s->timer, 0xFFFFFFFFF, 1);
+            break;
+        case HRT_START:
+            ptimer_run(s->timer, 0);
+            break;
+        default:
+            qemu_log("%s: Bad write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
+                     TYPE_QUATRO_HRT0, value, offset);
+            return;
+        }
         break;
     default:
         qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
@@ -261,6 +291,9 @@ static void quatro_hrt0_realize(DeviceState *dev, Error **errp)
     QuatroHRT0State *s = QUATRO_HRT0(dev);
 
     s->timer = ptimer_init(NULL, PTIMER_POLICY_DEFAULT);
+    /* FIXME: frequency setup so let it always run at 1 KHz */
+    ptimer_set_freq(s->timer, 1 * 1000);
+
     memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
                           TYPE_QUATRO_HRT0, 0x10);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
