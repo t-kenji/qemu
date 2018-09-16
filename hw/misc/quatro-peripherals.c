@@ -51,23 +51,31 @@ typedef struct {
     [index] = {#index, (offset), (reset_value)}
 
 enum QuatroA15GPFRegs {
+    A15RST,
     A15EVA0,
     A15EVA1,
     QUATRO_A15GPF_NUM_REGS
 };
 
 static const QuatroPeriReg quatro_a15gpf_regs[] = {
+    REG_ITEM(A15RST,  0x0024, 0x00000000),
     REG_ITEM(A15EVA0, 0x0040, 0x00000000),
     REG_ITEM(A15EVA1, 0x0044, 0x00000000),
 };
 
 enum QuatroRstGenRegs {
     PAD_INTERNAL,
+    POWER_CTRL,
+    POWER_STAT,
+    POWER_ISO,
     QUATRO_RSTGEN_NUM_REGS
 };
 
 static const QuatroPeriReg quatro_rstgen_regs[] = {
     REG_ITEM(PAD_INTERNAL, 0x0024, 0x00000040),
+    REG_ITEM(POWER_ISO,    0x0160, 0x00000000),
+    REG_ITEM(POWER_CTRL,   0x0164, 0x00000000),
+    REG_ITEM(POWER_STAT,   0x0168, 0x00000000),
 };
 
 enum QuatroDDRMCRegs {
@@ -248,6 +256,9 @@ static void quatro_a15gpf_write(void *opaque, hwaddr offset, uint64_t value, uns
                                                   offset);
 
     switch (index) {
+    case A15RST:
+        s->regs[A15RST] = (uint32_t)value;
+        break;
     case A15EVA0:
         s->regs[A15EVA0] = (uint32_t)value;
         break;
@@ -325,6 +336,15 @@ static void quatro_rstgen_write(void *opaque, hwaddr offset, uint64_t value, uns
     switch (index) {
     case PAD_INTERNAL:
         s->regs[PAD_INTERNAL] = (uint32_t)value;
+        break;
+    case POWER_ISO:
+        s->regs[POWER_ISO] = (uint32_t)value;
+        break;
+    case POWER_CTRL:
+        s->regs[POWER_CTRL] = (uint32_t)value;
+        break;
+    case POWER_STAT:
+        s->regs[POWER_STAT] = (uint32_t)value;
         break;
     default:
         qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",

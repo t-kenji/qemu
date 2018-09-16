@@ -46,11 +46,23 @@ enum QuatroClkSysCGValues {
     CLKSTATSW1_SYS_IS_XIN0_CLK = 0x00010000,
 };
 
+enum QuatroRTCValues {
+    RTC_BUSY = 0x01,
+};
+
 enum QuatroHRT0Values {
     HRT_STOP  = 0x00000000,
     HRT_CLEAR = 0x00000001,
     HRT_START = 0x00000002,
 };
+
+typedef struct {
+    union {
+        uint32_t dword;
+        uint16_t word[2];
+        uint8_t byte[4];
+    };
+} Reg;
 
 typedef struct {
     const char *name;
@@ -86,14 +98,14 @@ static const QuatroTimerReg quatro_clk_regs[] = {
 };
 
 enum QuatroRTCRegs {
-    CNT,
-    CTL,
+    RTC_CNT,
+    RTC_CTL,
     QUATRO_RTC_NUM_REGS
 };
 
 static const QuatroTimerReg quatro_rtc_regs[] = {
-    REG_ITEM(CNT, 0x0010, 0x00000000),
-    REG_ITEM(CTL, 0x001C, 0x00000000),
+    REG_ITEM(RTC_CNT, 0x0010, 0x00000000),
+    REG_ITEM(RTC_CTL, 0x001C, 0x00000004),
 };
 
 enum QuatroHRT0State {
@@ -292,6 +304,8 @@ static void quatro_clk_class_init(ObjectClass *oc, void *data)
 static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
 {
     QuatroRTCState *s = QUATRO_RTC(opaque);
+    int byte = offset % sizeof(uint32_t);
+    offset -= byte;
     int index = quatro_timer_offset_to_index(quatro_rtc_regs,
                                              QUATRO_RTC_NUM_REGS,
                                              offset);
@@ -303,6 +317,12 @@ static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
     }
 
     uint64_t value = s->regs[index];
+    switch (index) {
+    case RTC_CTL: {
+            s->regs[RTC_CTL] &= ~RTC_BUSY;
+        }
+        break;
+    };
     qemu_log("%s: read 0x%" PRIx64 " from offset 0x%" HWADDR_PRIx "\n",
              TYPE_QUATRO_RTC, value, offset);
     return value;
@@ -311,16 +331,32 @@ static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
 static void quatro_rtc_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
 {
     QuatroRTCState *s = QUATRO_RTC(opaque);
+    int byte = offset % sizeof(uint32_t);
+    offset -= byte;
     int index = quatro_timer_offset_to_index(quatro_rtc_regs,
                                              QUATRO_RTC_NUM_REGS,
                                              offset);
 
     switch (index) {
-    case CNT:
-        s->regs[CNT] = (uint32_t)value;
+    case RTC_CNT:
+        s->regs[RTC_CNT] = (uint32_t)value;
         break;
-    case CTL:
-        s->regs[CTL] = (uint32_t)value;
+    case RTC_CTL: {
+            Reg *reg = (Reg *)&s->regs[RTC_CTL];
+            switch (size) {
+            case 1:
+                reg->byte[byte] = (uint8_t)value;
+                break;
+            case 2:
+                reg->word[byte / 2] = (uint16_t)value;
+                break;
+            case 4:
+                reg->dword = (uint32_t)value;
+                break;
+            }
+            qemu_log("%s: CTL: byte %d, size %d, 0x%08" PRIx32 "\n",
+                     TYPE_QUATRO_RTC, byte, size, s->regs[RTC_CTL]);
+        }
         break;
     default:
         qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
