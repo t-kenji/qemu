@@ -2186,7 +2186,9 @@ static void armv7m_nvic_realize(DeviceState *dev, Error **errp)
     Error *err = NULL;
     int regionlen;
 
-    s->cpu = ARM_CPU(qemu_get_cpu(0));
+    if (s->cpu == NULL) {
+        s->cpu = ARM_CPU(qemu_get_cpu(0));
+    }
 
     if (!s->cpu || !arm_feature(&s->cpu->env, ARM_FEATURE_M)) {
         error_setg(errp, "The NVIC can only be used with a Cortex-M CPU");

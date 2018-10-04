@@ -19,7 +19,9 @@
 
 #include "qemu-common.h"
 #include "hw/arm/arm.h"
+#include "hw/arm/armv7m.h"
 #include "hw/cpu/a15mpcore.h"
+#include "hw/intc/armv7m_nvic.h"
 
 #define TYPE_CSR_QUATRO "csr,quatro-5500"
 #define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
@@ -29,8 +31,8 @@
 #define GiB(n) ((n) * 1024UL * 1024UL * 1024UL)
 
 enum CsrQuatroConfiguration {
-    CSR_QUATRO_NUM_MPU_CPUS = 3,
-    CSR_QUATRO_NUM_MCU_CPUS = 2,
+    CSR_QUATRO_NUM_AP_CPUS = 3,
+    CSR_QUATRO_NUM_MP_CPUS = 2,
 
     CSR_QUATRO_NUM_UARTS = 3,
     CSR_QUATRO_NUM_SDHCIS = 3,
@@ -84,9 +86,11 @@ typedef struct {
     DeviceState parent_obj;
 
     /*< public >*/
-    ARMCPU mpu_cpus[CSR_QUATRO_NUM_MPU_CPUS];
-    ARMCPU mcu_cpus[CSR_QUATRO_NUM_MCU_CPUS];
+    ARMCPU ap_cpus[CSR_QUATRO_NUM_AP_CPUS];
+    ARMCPU mp_cpus[CSR_QUATRO_NUM_MP_CPUS];
     A15MPPrivState a7mpcore;
+    NVICState nvics[CSR_QUATRO_NUM_MP_CPUS];
+    MemoryRegion cm3mem[CSR_QUATRO_NUM_MP_CPUS];
     MemoryRegion sram;
 } CsrQuatroState;
 

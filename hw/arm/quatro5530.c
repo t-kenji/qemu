@@ -53,7 +53,7 @@ static void quatro5530_init(MachineState *machine)
         .kernel_filename = machine->kernel_filename,
         .kernel_cmdline = machine->kernel_cmdline,
         .initrd_filename = machine->initrd_filename,
-        .nb_cpus = MIN(smp_cpus, CSR_QUATRO_NUM_MPU_CPUS),
+        .nb_cpus = MIN(smp_cpus, 1 + CSR_QUATRO_NUM_MP_CPUS),
     };
 
     object_initialize(&ms->soc, sizeof(ms->soc), TYPE_CSR_QUATRO);
@@ -94,7 +94,7 @@ static void quatro5530_init(MachineState *machine)
                                 CSR_QUATRO_DDR_RAM_ADDR, &ms->ram);
 
     if (!qtest_enabled()) {
-        arm_load_kernel(&ms->soc.mpu_cpus[0], &binfo);
+        arm_load_kernel(&ms->soc.ap_cpus[0], &binfo);
     }
 }
 
@@ -102,8 +102,8 @@ static void quatro5530_machine_class_init(MachineClass *mc)
 {
     mc->desc = "CSR Quatro5530 board with 1xA9 and 1xA15, 2xM3";
     mc->init = quatro5530_init;
-    mc->max_cpus = CSR_QUATRO_NUM_MPU_CPUS + CSR_QUATRO_NUM_MCU_CPUS;
-    mc->default_cpus = CSR_QUATRO_NUM_MPU_CPUS;
+    mc->max_cpus = CSR_QUATRO_NUM_AP_CPUS + CSR_QUATRO_NUM_MP_CPUS;
+    mc->default_cpus = 1 + CSR_QUATRO_NUM_MP_CPUS;
     mc->default_ram_size = GiB(1);
     mc->block_default_type = IF_SD;
 }
