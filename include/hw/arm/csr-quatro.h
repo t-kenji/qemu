@@ -19,13 +19,23 @@
 
 #include "qemu-common.h"
 #include "hw/arm/arm.h"
-#include "hw/arm/armv7m.h"
 #include "hw/cpu/a15mpcore.h"
-#include "hw/intc/armv7m_nvic.h"
+
+//#define ENABLE_COPROCESSOR
 
 #define TYPE_CSR_QUATRO "csr,quatro-5500"
 #define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
                                      (obj), TYPE_CSR_QUATRO)
+
+#if defined(ENABLE_COPROCESSOR)
+#define DEFAULT_CPUS (1 + CSR_QUATRO_NUM_MP_CPUS)
+#define MAX_CPUS (CSR_QUATRO_NUM_AP_CPUS + CSR_QUATRO_NUM_MP_CPUS)
+#define AP_CPUS MIN(smp_cpus - CSR_QUATRO_NUM_MP_CPUS, CSR_QUATRO_NUM_AP_CPUS)
+#else
+#define DEFAULT_CPUS (1)
+#define MAX_CPUS CSR_QUATRO_NUM_AP_CPUS
+#define AP_CPUS MIN(smp_cpus, CSR_QUATRO_NUM_AP_CPUS)
+#endif
 
 #define MiB(n) ((n) * 1024UL * 1024UL)
 #define GiB(n) ((n) * 1024UL * 1024UL * 1024UL)
@@ -66,6 +76,8 @@ enum CsrQuatroMemoryMap {
     CSR_QUATRO_USBH_ADDR     = 0x04600000,
     CSR_QUATRO_ETHERNET_ADDR = 0x04410000,
     CSR_QUATRO_SATA_ADDR     = 0x04A30000,
+    CSR_QUATRO_CM30_ADDR     = 0x05340000,
+    CSR_QUATRO_CM31_ADDR     = 0x05360000,
     CSR_QUATRO_SRAM_ADDR     = 0x05400000,
     CSR_QUATRO_SRAM_SIZE     = MiB(2),
 };
@@ -74,7 +86,7 @@ enum CsrQuatroInterrupts {
     CSR_QUATRO_UART0_IRQ = 18,
     CSR_QUATRO_UART1_IRQ = 29,
     CSR_QUATRO_UART2_IRQ = 137,
-
+    CSR_QUATRO_FCSPI_IRQ = 21,
     CSR_QUATRO_SDIO0_IRQ = 99,
     CSR_QUATRO_SDIO1_IRQ = 101,
 
@@ -87,10 +99,7 @@ typedef struct {
 
     /*< public >*/
     ARMCPU ap_cpus[CSR_QUATRO_NUM_AP_CPUS];
-    ARMCPU mp_cpus[CSR_QUATRO_NUM_MP_CPUS];
     A15MPPrivState a7mpcore;
-    NVICState nvics[CSR_QUATRO_NUM_MP_CPUS];
-    MemoryRegion cm3mem[CSR_QUATRO_NUM_MP_CPUS];
     MemoryRegion sram;
 } CsrQuatroState;
 
