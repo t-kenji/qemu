@@ -40,6 +40,7 @@ typedef struct {
     ARMCPU cpu;
     NVICState nvic;
 #endif
+    MemoryRegion container;
     MemoryRegion iomem;
 } QuatroCM3State;
 
@@ -77,7 +78,7 @@ static void quatro_cm3_realize(DeviceState *dev, Error **errp)
     s->cpu.env.nvic = &s->nvic;
     s->nvic.cpu = &s->cpu;
 
-    object_property_set_link(OBJECT(&s->cpu), OBJECT(&s->iomem),
+    object_property_set_link(OBJECT(&s->cpu), OBJECT(&s->container),
                              "memory", &error_abort);
     object_property_set_bool(OBJECT(&s->cpu),
                              true, "realized", &error_abort);
@@ -104,6 +105,8 @@ static void quatro_cm3_init(Object *obj)
 
     QuatroCM3State *s = QUATRO_CM3(obj);
 
+    memory_region_init_ram(&s->container, OBJECT(s), "quatro-cm3.container",
+                           0x1400000, &error_abort);
     memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
                           TYPE_QUATRO_CM3, QUATRO_CM3_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
@@ -113,6 +116,8 @@ static void quatro_cm3_init(Object *obj)
     sysbus_init_child_obj(obj, "nvic", &s->nvic, sizeof(s->nvic), TYPE_NVIC);
     object_property_add_alias(obj, "num-irq",
                               OBJECT(&s->nvic), "num-irq", &error_abort);
+    qemu_log("%s: cpu: %p, mem: %p, nvic: %p\n",
+             TYPE_QUATRO_CM3, &s->cpu, &s->iomem, &s->nvic);
 #endif
 }
 

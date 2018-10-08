@@ -19,6 +19,8 @@
 #include "qemu/bitops.h"
 #include "qemu/log.h"
 
+//#define ENABLE_DEBUG
+
 #define TYPE_QUATRO_CLK "quatro5500.clk"
 #define QUATRO_CLK(obj) OBJECT_CHECK(QuatroClkState, (obj), TYPE_QUATRO_CLK)
 
@@ -184,6 +186,19 @@ static const VMStateDescription quatro_hrt0_vmstate = {
     },
 };
 
+#if defined(ENABLE_DEBUG)
+#define DEBUGLOG(format, ...)                 \
+    do {                                      \
+        qemu_log(format "\n", ##__VA_ARGS__); \
+    } while (0)
+#else
+#define DEBUGLOG(format, ...)
+#endif
+#define ERRORLOG(format, ...)                                       \
+    do {                                                            \
+        qemu_log_mask(LOG_GUEST_ERROR, format "\n", ##__VA_ARGS__); \
+    } while (0)
+
 static inline int64_t quatro_sec_to_nsec(int64_t sec)
 {
     return sec * 1000000000;
@@ -215,14 +230,13 @@ static uint64_t quatro_clk_read(void *opaque, hwaddr offset, unsigned size)
                                              offset);
 
     if (index < 0) {
-        qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
-                 TYPE_QUATRO_CLK, offset);
+        ERRORLOG("%s: Bad read offset %#" HWADDR_PRIx, TYPE_QUATRO_CLK, offset);
         return 0;
     }
 
     uint64_t value = s->regs[index];
-    qemu_log("%s: read 0x%" PRIx64 " from offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_CLK, value, offset);
+    DEBUGLOG("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
+             TYPE_QUATRO_CLK, value, quatro_clk_regs[index].name, offset);
     return value;
 }
 
@@ -259,12 +273,12 @@ static void quatro_clk_write(void *opaque, hwaddr offset, uint64_t value, unsign
         s->regs[SYSCG_CLKDIVCTRL1] = (uint32_t)value;
         break;
     default:
-        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+        ERRORLOG("%s: Bad write offset %#" HWADDR_PRIx,
                  TYPE_QUATRO_CLK, offset);
         return;
     }
-    qemu_log("%s: write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_CLK, value, offset);
+    DEBUGLOG("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+             TYPE_QUATRO_CLK, value, quatro_clk_regs[index].name, offset);
 }
 
 static void quatro_clk_reset(DeviceState *dev)
@@ -311,20 +325,23 @@ static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
                                              offset);
 
     if (index < 0) {
-        qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
+        ERRORLOG("%s: Bad read offset %#" HWADDR_PRIx,
                  TYPE_QUATRO_RTC, offset);
         return 0;
     }
 
     uint64_t value = s->regs[index];
     switch (index) {
+    case RTC_CNT:
+        value = time(NULL);
+        break;
     case RTC_CTL: {
             s->regs[RTC_CTL] &= ~RTC_BUSY;
         }
         break;
     };
-    qemu_log("%s: read 0x%" PRIx64 " from offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_RTC, value, offset);
+    DEBUGLOG("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
+             TYPE_QUATRO_RTC, value, quatro_rtc_regs[index].name, offset);
     return value;
 }
 
@@ -353,18 +370,18 @@ static void quatro_rtc_write(void *opaque, hwaddr offset, uint64_t value, unsign
             case 4:
                 reg->dword = (uint32_t)value;
                 break;
+            default:
+                break;
             }
-            qemu_log("%s: CTL: byte %d, size %d, 0x%08" PRIx32 "\n",
-                     TYPE_QUATRO_RTC, byte, size, s->regs[RTC_CTL]);
         }
         break;
     default:
-        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+        ERRORLOG("%s: Bad write offset %#" HWADDR_PRIx,
                  TYPE_QUATRO_RTC, offset);
         return;
     }
-    qemu_log("%s: write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_RTC, value, offset);
+    DEBUGLOG("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+             TYPE_QUATRO_RTC, value, quatro_rtc_regs[index].name, offset);
 }
 
 static void quatro_rtc_reset(DeviceState *dev)
@@ -409,7 +426,7 @@ static uint64_t quatro_hrt0_read(void *opaque, hwaddr offset, unsigned size)
                                              offset);
 
     if (index < 0) {
-        qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
+        ERRORLOG("%s: Bad read offset %#" HWADDR_PRIx,
                  TYPE_QUATRO_HRT0, offset);
         return 0;
     }
@@ -423,8 +440,6 @@ static uint64_t quatro_hrt0_read(void *opaque, hwaddr offset, unsigned size)
         break;
     }
     uint64_t value = s->regs[index];
-    //qemu_log("%s: read 0x%" PRIX64 " from offset 0x%" HWADDR_PRIx "\n",
-    //         TYPE_QUATRO_HRT0, value, offset);
     return value;
 }
 
@@ -460,18 +475,16 @@ static void quatro_hrt0_write(void *opaque,
             s->counter_offset = quatro_hrt_get_count(s);
             break;
         default:
-            qemu_log("%s: Bad write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
-                     TYPE_QUATRO_HRT0, value, offset);
             return;
         }
         break;
     default:
-        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+        ERRORLOG("%s: Bad write offset %#" HWADDR_PRIx,
                  TYPE_QUATRO_HRT0, offset);
         return;
     }
-    qemu_log("%s: write 0x%" PRIx64 " to offset 0x%" HWADDR_PRIx "\n",
-             TYPE_QUATRO_HRT0, value, offset);
+    DEBUGLOG("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+             TYPE_QUATRO_HRT0, value, quatro_hrt0_regs[index].name, offset);
 }
 
 static void quatro_hrt0_reset(DeviceState *dev)
