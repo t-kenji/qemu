@@ -335,9 +335,8 @@ static uint64_t quatro_rtc_read(void *opaque, hwaddr offset, unsigned size)
     case RTC_CNT:
         value = time(NULL);
         break;
-    case RTC_CTL: {
-            s->regs[RTC_CTL] &= ~RTC_BUSY;
-        }
+    case RTC_CTL:
+        s->regs[RTC_CTL] &= ~RTC_BUSY;
         break;
     };
     DEBUGLOG("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",

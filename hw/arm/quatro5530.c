@@ -53,7 +53,7 @@ static void quatro5530_init(MachineState *machine)
         .kernel_filename = machine->kernel_filename,
         .kernel_cmdline = machine->kernel_cmdline,
         .initrd_filename = machine->initrd_filename,
-        .nb_cpus = MIN(smp_cpus, MAX_CPUS),
+        .nb_cpus = MIN(smp_cpus, CSR_QUATRO_NUM_AP_CPUS),
     };
 
     object_initialize(&ms->soc, sizeof(ms->soc), TYPE_CSR_QUATRO);
@@ -102,8 +102,8 @@ static void quatro5530_machine_class_init(MachineClass *mc)
 {
     mc->desc = "CSR Quatro5530 board with 1xA9 and 1xA15, 2xM3";
     mc->init = quatro5530_init;
-    mc->max_cpus = MAX_CPUS;
-    mc->default_cpus = DEFAULT_CPUS;
+    mc->max_cpus = CSR_QUATRO_NUM_AP_CPUS;
+    mc->default_cpus = 1;
     mc->default_ram_size = GiB(1);
     mc->block_default_type = IF_SD;
 }

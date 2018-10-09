@@ -36,11 +36,6 @@ typedef struct {
     SysBusDevice parent_obj;
 
     /*< public >*/
-#if defined(ENABLE_COPROCESSOR)
-    ARMCPU cpu;
-    NVICState nvic;
-#endif
-    MemoryRegion container;
     MemoryRegion iomem;
 } QuatroCM3State;
 
@@ -72,27 +67,6 @@ static void quatro_cm3_reset(DeviceState *dev)
 
 static void quatro_cm3_realize(DeviceState *dev, Error **errp)
 {
-#if defined(ENABLE_COPROCESSOR)
-    QuatroCM3State *s = QUATRO_CM3(dev);
-
-    s->cpu.env.nvic = &s->nvic;
-    s->nvic.cpu = &s->cpu;
-
-    object_property_set_link(OBJECT(&s->cpu), OBJECT(&s->container),
-                             "memory", &error_abort);
-    object_property_set_bool(OBJECT(&s->cpu),
-                             true, "realized", &error_abort);
-    object_property_set_bool(OBJECT(&s->nvic),
-                             true, "realized", &error_abort);
-
-    qdev_pass_gpios(DEVICE(&s->nvic), dev, NULL);
-    qdev_pass_gpios(DEVICE(&s->nvic), dev, "SYSRESETREQ");
-    SysBusDevice *sbd = SYS_BUS_DEVICE(&s->nvic);
-    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(DEVICE(&s->cpu), ARM_CPU_IRQ));
-
-    memory_region_add_subregion(&s->iomem, 0xe000e000,
-                                sysbus_mmio_get_region(sbd, 0));
-#endif
 }
 
 static void quatro_cm3_init(Object *obj)
@@ -105,20 +79,9 @@ static void quatro_cm3_init(Object *obj)
 
     QuatroCM3State *s = QUATRO_CM3(obj);
 
-    memory_region_init_ram(&s->container, OBJECT(s), "quatro-cm3.container",
-                           0x1400000, &error_abort);
     memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
                           TYPE_QUATRO_CM3, QUATRO_CM3_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
-#if defined(ENABLE_COPROCESSOR)
-    object_initialize(&s->cpu, sizeof(s->cpu), ARM_CPU_TYPE_NAME("cortex-m3"));
-
-    sysbus_init_child_obj(obj, "nvic", &s->nvic, sizeof(s->nvic), TYPE_NVIC);
-    object_property_add_alias(obj, "num-irq",
-                              OBJECT(&s->nvic), "num-irq", &error_abort);
-    qemu_log("%s: cpu: %p, mem: %p, nvic: %p\n",
-             TYPE_QUATRO_CM3, &s->cpu, &s->iomem, &s->nvic);
-#endif
 }
 
 static void quatro_cm3_class_init(ObjectClass *oc, void *data)
