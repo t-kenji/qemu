@@ -22,6 +22,7 @@
 #include "hw/sd/sdhci.h"
 #include "hw/sd/sd.h"
 #include "hw/boards.h"
+#include "hw/loader.h"
 #include "qemu/error-report.h"
 #include "qemu/log.h"
 #include "exec/address-spaces.h"
@@ -32,6 +33,24 @@ typedef struct {
     CsrQuatroState soc;
     MemoryRegion ram;
 } CsrQuatro5530;
+
+static void write_smpboot(ARMCPU *cpu, const struct arm_boot_info *info)
+{
+    static const uint32_t smpboot[] = {
+        0x20005000,
+        0x00000001,
+    };
+
+    rom_add_blob_fixed_as("smpboot", smpboot, sizeof(smpboot),
+                       info->smp_loader_start,
+                       arm_boot_address_space(cpu, info));
+}
+
+static void reset_secondary(ARMCPU *cpu, const struct arm_boot_info *info)
+{
+    CPUState *cs = CPU(cpu);
+    cpu_set_pc(cs, info->smp_loader_start);
+}
 
 static void quatro5530_init(MachineState *machine)
 {
@@ -53,7 +72,11 @@ static void quatro5530_init(MachineState *machine)
         .kernel_filename = machine->kernel_filename,
         .kernel_cmdline = machine->kernel_cmdline,
         .initrd_filename = machine->initrd_filename,
-        .nb_cpus = MIN(smp_cpus, CSR_QUATRO_NUM_AP_CPUS),
+        .nb_cpus = MIN(smp_cpus, MAX_CPUS),
+
+        .smp_loader_start = 0,
+        .write_secondary_boot = write_smpboot,
+        .secondary_cpu_reset_hook = reset_secondary,
     };
 
     object_initialize(&ms->soc, sizeof(ms->soc), TYPE_CSR_QUATRO);
@@ -102,8 +125,8 @@ static void quatro5530_machine_class_init(MachineClass *mc)
 {
     mc->desc = "CSR Quatro5530 board with 1xA9 and 1xA15, 2xM3";
     mc->init = quatro5530_init;
-    mc->max_cpus = CSR_QUATRO_NUM_AP_CPUS;
-    mc->default_cpus = 1;
+    mc->max_cpus = MAX_CPUS;
+    mc->default_cpus = DEFAULT_CPUS;
     mc->default_ram_size = GiB(1);
     mc->block_default_type = IF_SD;
 }

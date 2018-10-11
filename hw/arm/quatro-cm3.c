@@ -36,6 +36,9 @@ typedef struct {
     SysBusDevice parent_obj;
 
     /*< public >*/
+    ARMCPU cpu;
+    NVICState nvic;
+    MemoryRegion container;
     MemoryRegion iomem;
 } QuatroCM3State;
 
@@ -67,6 +70,27 @@ static void quatro_cm3_reset(DeviceState *dev)
 
 static void quatro_cm3_realize(DeviceState *dev, Error **errp)
 {
+    QuatroCM3State *s = QUATRO_CM3(dev);
+
+    s->cpu.env.nvic = &s->nvic;
+    s->nvic.cpu = &s->cpu;
+
+    object_property_set_link(OBJECT(&s->cpu), OBJECT(&s->container),
+                             "memory", &error_abort);
+    object_property_set_bool(OBJECT(&s->cpu), true,
+                             "start-powered-off", &error_abort);
+    object_property_set_bool(OBJECT(&s->cpu), true,
+                             "realized", &error_abort);
+    object_property_set_bool(OBJECT(&s->nvic), true,
+                             "realized", &error_abort);
+
+    qdev_pass_gpios(DEVICE(&s->nvic), dev, NULL);
+    qdev_pass_gpios(DEVICE(&s->nvic), dev, "SYSRESETREQ");
+    SysBusDevice *sbd = SYS_BUS_DEVICE(&s->nvic);
+    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(DEVICE(&s->cpu), ARM_CPU_IRQ));
+
+    memory_region_add_subregion(&s->container, 0xE000E000,
+                                sysbus_mmio_get_region(sbd, 0));
 }
 
 static void quatro_cm3_init(Object *obj)
@@ -79,9 +103,16 @@ static void quatro_cm3_init(Object *obj)
 
     QuatroCM3State *s = QUATRO_CM3(obj);
 
-    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+    memory_region_init_ram(&s->container, obj, "quatro-cm3.container",
+                           QUATRO_CM3_MEM_SIZE, &error_abort);
+    memory_region_init_io(&s->iomem, obj, &ops, s,
                           TYPE_QUATRO_CM3, QUATRO_CM3_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
+    object_initialize(&s->cpu, sizeof(s->cpu), ARM_CPU_TYPE_NAME("cortex-m3"));
+
+    sysbus_init_child_obj(obj, "nvic", &s->nvic, sizeof(s->nvic), TYPE_NVIC);
+    object_property_add_alias(obj, "num-irq",
+                              OBJECT(&s->nvic), "num-irq", &error_abort);
 }
 
 static void quatro_cm3_class_init(ObjectClass *oc, void *data)

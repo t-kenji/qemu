@@ -22,8 +22,11 @@
 #include "hw/cpu/a15mpcore.h"
 
 #define TYPE_CSR_QUATRO "csr,quatro-5500"
-#define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, \
-                                     (obj), TYPE_CSR_QUATRO)
+#define CSR_QUATRO(obj) OBJECT_CHECK(CsrQuatroState, (obj), TYPE_CSR_QUATRO)
+
+#define DEFAULT_CPUS (1 + CSR_QUATRO_NUM_MP_CPUS)
+#define MAX_CPUS (CSR_QUATRO_NUM_AP_CPUS + CSR_QUATRO_NUM_MP_CPUS)
+#define AP_CPUS MIN(smp_cpus - CSR_QUATRO_NUM_MP_CPUS, CSR_QUATRO_NUM_AP_CPUS)
 
 #define MiB(n) ((n) * 1024UL * 1024UL)
 #define GiB(n) ((n) * 1024UL * 1024UL * 1024UL)

@@ -29,7 +29,7 @@
 static void csr_quatro_init(Object *obj)
 {
     CsrQuatroState *ms = CSR_QUATRO(obj);
-    int num_cpu = MIN(smp_cpus, CSR_QUATRO_NUM_AP_CPUS);
+    int num_cpu = AP_CPUS;
 
     object_initialize_child(obj, "ap-cpu[*]",
                             &ms->ap_cpus[0], sizeof(ms->ap_cpus[0]),
@@ -52,7 +52,7 @@ static void csr_quatro_init(Object *obj)
 static void csr_quatro_realize(DeviceState *dev, Error **errp)
 {
     CsrQuatroState *ms = CSR_QUATRO(dev);
-    int num_cpu = MIN(smp_cpus, CSR_QUATRO_NUM_AP_CPUS);
+    int num_cpu = AP_CPUS;
 
     for (int i = 0; i < num_cpu; ++i) {
         Object *cpu = OBJECT(&ms->ap_cpus[i]);
@@ -61,6 +61,12 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
         if (num_cpu > 1) {
             object_property_set_int(cpu, CSR_QUATRO_A7MPCORE_ADDR,
                                     "reset-cbar", &error_abort);
+        }
+
+        /* All CPU but CPU 0 start in power off mode */
+        if (i != 0) {
+            object_property_set_bool(cpu, true,
+                                     "start-powered-off", &error_abort);
         }
 
         object_property_set_bool(cpu, true, "realized", &error_abort);
