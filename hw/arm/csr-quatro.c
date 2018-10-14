@@ -106,8 +106,6 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
     sysbus_create_simple("quatro5500.rtc", CSR_QUATRO_RTC_ADDR, NULL);
     sysbus_create_simple("quatro5500.hrt0", CSR_QUATRO_HRT0_ADDR, NULL);
     sysbus_create_simple("quatro5500.sdmclk", CSR_QUATRO_SDMCLK_ADDR, NULL);
-    sysbus_create_simple("quatro5500.fcspi", CSR_QUATRO_FCSPI_ADDR,
-                         qdev_get_gpio_in(DEVICE(&ms->a7mpcore), CSR_QUATRO_FCSPI_IRQ));
     sysbus_create_simple("quatro5500.ddrmc", CSR_QUATRO_DDRMC_ADDR, NULL);
     sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO0_ADDR, NULL);

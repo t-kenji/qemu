@@ -16,10 +16,15 @@
 
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
+#include "hw/ssi/ssi.h"
+#include "sysemu/dma.h"
+#include "qemu/fifo32.h"
 #include "qemu/log.h"
 
 #define TYPE_QUATRO_FCSPI "quatro5500.fcspi"
 #define QUATRO_FCSPI(obj) OBJECT_CHECK(QuatroFCSPIState, (obj), TYPE_QUATRO_FCSPI)
+
+#define FIFO_CAPACITY (32)
 
 enum QuatroSPIMemoryMap {
     QUATRO_FCSPI_MMIO_SIZE = 0x10000,
@@ -57,7 +62,7 @@ enum QuatroFCSPIRegs {
 
 static const QuatroSPIReg quatro_fcspi_regs[] = {
     REG_ITEM(CTRL,      0x0000, 0x00000000),
-    REG_ITEM(STAT,      0x0004, 0x00000000),
+    REG_ITEM(STAT,      0x0004, 0x00000008),
     REG_ITEM(ACCRR0,    0x0008, 0x00000000),
     REG_ITEM(ACCRR1,    0x000C, 0x00000000),
     REG_ITEM(ACCRR2,    0x0010, 0x00000000),
@@ -66,7 +71,7 @@ static const QuatroSPIReg quatro_fcspi_regs[] = {
     REG_ITEM(FFSTAT,    0x001C, 0x00000000),
     REG_ITEM(DEFMEM,    0x0020, 0x00000000),
     REG_ITEM(EXADDR,    0x0024, 0x00000000),
-    REG_ITEM(MEMSPEC,   0x0028, 0x00010219),
+    REG_ITEM(MEMSPEC,   0x0028, 0x0020BA20),
     REG_ITEM(DMA_SADDR, 0x0800, 0x00000000),
     REG_ITEM(DMA_FADDR, 0x0804, 0x00000000),
     REG_ITEM(DMA_LEN,   0x0808, 0x00000000),
@@ -85,6 +90,10 @@ typedef struct {
     MemoryRegion iomem;
     uint32_t regs[QUATRO_FCSPI_NUM_REGS];
     qemu_irq irq;
+    qemu_irq cs_line;
+    SSIBus *spi;
+    Fifo32 rx_fifo;
+    Fifo32 tx_fifo;
 } QuatroFCSPIState;
 
 static const VMStateDescription quatro_fcspi_vmstate = {
@@ -185,15 +194,24 @@ static void quatro_fcspi_realize(DeviceState *dev, Error **errp)
     static const MemoryRegionOps ops = {
         .read       = quatro_fcspi_read,
         .write      = quatro_fcspi_write,
-        .endianness = DEVICE_NATIVE_ENDIAN,
+        .endianness = DEVICE_LITTLE_ENDIAN,
     };
 
     QuatroFCSPIState *s = QUATRO_FCSPI(dev);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+
+    s->spi = ssi_create_bus(dev, "spi");
+
+    sysbus_init_irq(sbd, &s->irq);
+    ssi_auto_connect_slaves(dev, &s->cs_line, s->spi);
+    sysbus_init_irq(sbd, &s->cs_line);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
                           TYPE_QUATRO_FCSPI, QUATRO_FCSPI_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
-    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
+
+    fifo32_create(&s->tx_fifo, FIFO_CAPACITY);
+    fifo32_create(&s->rx_fifo, FIFO_CAPACITY);
 }
 
 static void quatro_fcspi_class_init(ObjectClass *oc, void *data)

@@ -21,6 +21,7 @@
 #include "hw/sysbus.h"
 #include "hw/sd/sdhci.h"
 #include "hw/sd/sd.h"
+#include "hw/ssi/ssi.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
 #include "qemu/error-report.h"
@@ -102,13 +103,33 @@ static void quatro5530_init(MachineState *machine)
 
         sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, sdhcis[i].offset);
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
-                           qdev_get_gpio_in(DEVICE(&ms->soc.a7mpcore), sdhcis[i].irq));
+                           qdev_get_gpio_in(DEVICE(&ms->soc.a7mpcore),
+                                            sdhcis[i].irq));
 
         DriveInfo *di = drive_get_next(IF_SD);
         BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
         DeviceState *carddev = qdev_create(qdev_get_child_bus(dev, "sd-bus"), TYPE_SD_CARD);
         qdev_prop_set_drive(carddev, "drive", blk, &error_abort);
         qdev_init_nofail(carddev);
+    }
+
+    {
+        DeviceState *dev = qdev_create(NULL, "quatro5500.fcspi");
+        qdev_init_nofail(dev);
+
+        sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, CSR_QUATRO_FCSPI_ADDR);
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                           qdev_get_gpio_in(DEVICE(&ms->soc.a7mpcore),
+                                            CSR_QUATRO_FCSPI_IRQ));
+
+        DriveInfo *di = drive_get_next(IF_MTD);
+        BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+        SSIBus *bus = (SSIBus *)qdev_get_child_bus(dev, "spi");
+        DeviceState *flashdev = ssi_create_slave_no_init(bus, "n25q512a");
+        qdev_prop_set_drive(flashdev, "drive", blk, &error_abort);
+        qdev_init_nofail(flashdev);
+        sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
+                           qdev_get_gpio_in_named(flashdev, SSI_GPIO_CS, 0));
     }
 
     memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",
