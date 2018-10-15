@@ -30,6 +30,12 @@ enum QuatroSPIMemoryMap {
     QUATRO_FCSPI_MMIO_SIZE = 0x10000,
 };
 
+enum QuatroFCSPIBits {
+    FCSPI_DMA_CST__DIR_BIT = 0,
+    FCSPI_DMA_CST__TRANS_BIT = 4,
+    FCSPI_DMA_CST__RESET_BIT = 24,
+};
+
 typedef struct {
     const char *name;
     hwaddr offset;
@@ -90,6 +96,7 @@ typedef struct {
     MemoryRegion iomem;
     uint32_t regs[QUATRO_FCSPI_NUM_REGS];
     qemu_irq irq;
+    bool irqstat;
     qemu_irq cs_line;
     SSIBus *spi;
     Fifo32 rx_fifo;
@@ -102,6 +109,7 @@ static const VMStateDescription quatro_fcspi_vmstate = {
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
         VMSTATE_UINT32_ARRAY(regs, QuatroFCSPIState, QUATRO_FCSPI_NUM_REGS),
+        VMSTATE_BOOL(irqstat, QuatroFCSPIState),
         VMSTATE_END_OF_LIST()
     },
 };
@@ -117,6 +125,50 @@ static int quatro_spi_offset_to_index(const QuatroSPIReg *regs,
     }
 
     return -1;
+}
+
+static void quatro_fcspi_int_update(QuatroFCSPIState *s)
+{
+    qemu_set_irq(s->irq, s->irqstat);
+}
+
+static void quatro_dump(void *buf, size_t len)
+{
+    uint8_t *ptr = (uint8_t *)buf;
+    for (size_t i = 0; i < len; ++i) {
+        if ((i % 16) == 0) qemu_log("\n");
+        qemu_log(" %02x", ptr[i]);
+    }
+    qemu_log("%s======\n", (((len % 16) == 0) ? "\n" : ""));
+}
+
+static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
+{
+    static uint8_t buf[0x200];
+
+    uint32_t cst = s->regs[DMA_CST];
+    uint32_t len = s->regs[DMA_LEN];
+    uint32_t faddr = s->regs[DMA_FADDR];
+
+    if ((cst & (1 << FCSPI_DMA_CST__DIR_BIT)) != 0) {
+        /* write */
+        cpu_physical_memory_read(s->regs[DMA_SADDR], buf, len);
+    } else {
+        /* read */
+        memset(buf, 0, sizeof(buf));
+        uint32_t rx;
+        rx = ssi_transfer(s->spi, 0x03);
+        rx = ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
+        rx = ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
+        rx = ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
+        for (uint32_t i = 0; i < len; ++i) {
+            buf[i] = ssi_transfer(s->spi, 0);
+        }
+        cpu_physical_memory_write(s->regs[DMA_SADDR], buf, len);
+        quatro_dump(buf, sizeof(buf));
+    }
+
+    s->irqstat = true;
 }
 
 static uint64_t quatro_fcspi_read(void *opaque, hwaddr offset, unsigned size)
@@ -158,15 +210,24 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
     case EXADDR:
     case MEMSPEC:
     case DMA_SADDR:
+        s->regs[DMA_SADDR] = (uint32_t)value;
+        break;
     case DMA_FADDR:
+        s->regs[DMA_FADDR] = (uint32_t)value;
+        break;
     case DMA_LEN:
+        s->regs[DMA_LEN] = (uint32_t)value;
         break;
     case DMA_CST:
-        if (value & 0x10) {
-            qemu_set_irq(s->irq, 1);
-        } else {
-            qemu_set_irq(s->irq, 0);
+        s->regs[DMA_CST] = (uint32_t)value;
+        if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__TRANS_BIT)) {
+            quatro_fcspi_dma_transfer(s);
         }
+        if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__RESET_BIT)) {
+            s->regs[DMA_CST] &= ~ (1 << FCSPI_DMA_CST__RESET_BIT);
+            s->irqstat = false;
+        }
+        quatro_fcspi_int_update(s);
         break;
     case DMA_DEBUG:
     case DMA_SPARE:
