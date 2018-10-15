@@ -18,13 +18,13 @@
 #include "hw/sysbus.h"
 #include "hw/ssi/ssi.h"
 #include "sysemu/dma.h"
-#include "qemu/fifo32.h"
+#include "qemu/fifo8.h"
 #include "qemu/log.h"
 
 #define TYPE_QUATRO_FCSPI "quatro5500.fcspi"
 #define QUATRO_FCSPI(obj) OBJECT_CHECK(QuatroFCSPIState, (obj), TYPE_QUATRO_FCSPI)
 
-#define FIFO_CAPACITY (32)
+#define FIFO_CAPACITY (256)
 
 enum QuatroSPIMemoryMap {
     QUATRO_FCSPI_MMIO_SIZE = 0x10000,
@@ -99,8 +99,8 @@ typedef struct {
     bool irqstat;
     qemu_irq cs_line;
     SSIBus *spi;
-    Fifo32 rx_fifo;
-    Fifo32 tx_fifo;
+    Fifo8 tx_fifo;
+    Fifo8 rx_fifo;
 } QuatroFCSPIState;
 
 static const VMStateDescription quatro_fcspi_vmstate = {
@@ -110,6 +110,8 @@ static const VMStateDescription quatro_fcspi_vmstate = {
     .fields = (VMStateField[]){
         VMSTATE_UINT32_ARRAY(regs, QuatroFCSPIState, QUATRO_FCSPI_NUM_REGS),
         VMSTATE_BOOL(irqstat, QuatroFCSPIState),
+        VMSTATE_FIFO8(tx_fifo, QuatroFCSPIState),
+        VMSTATE_FIFO8(rx_fifo, QuatroFCSPIState),
         VMSTATE_END_OF_LIST()
     },
 };
@@ -132,41 +134,41 @@ static void quatro_fcspi_int_update(QuatroFCSPIState *s)
     qemu_set_irq(s->irq, s->irqstat);
 }
 
-static void quatro_dump(void *buf, size_t len)
-{
-    uint8_t *ptr = (uint8_t *)buf;
-    for (size_t i = 0; i < len; ++i) {
-        if ((i % 16) == 0) qemu_log("\n");
-        qemu_log(" %02x", ptr[i]);
-    }
-    qemu_log("%s======\n", (((len % 16) == 0) ? "\n" : ""));
-}
-
 static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
 {
-    static uint8_t buf[0x200];
-
     uint32_t cst = s->regs[DMA_CST];
     uint32_t len = s->regs[DMA_LEN];
     uint32_t faddr = s->regs[DMA_FADDR];
+    uint32_t phys_addr = s->regs[DMA_SADDR];
+    uint32_t data_size;
 
+    qemu_set_irq(s->cs_line, 0);
     if ((cst & (1 << FCSPI_DMA_CST__DIR_BIT)) != 0) {
         /* write */
-        cpu_physical_memory_read(s->regs[DMA_SADDR], buf, len);
     } else {
         /* read */
-        memset(buf, 0, sizeof(buf));
-        uint32_t rx;
-        rx = ssi_transfer(s->spi, 0x03);
-        rx = ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
-        rx = ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
-        rx = ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
-        for (uint32_t i = 0; i < len; ++i) {
-            buf[i] = ssi_transfer(s->spi, 0);
-        }
-        cpu_physical_memory_write(s->regs[DMA_SADDR], buf, len);
-        quatro_dump(buf, sizeof(buf));
+        ssi_transfer(s->spi, 0x03);
+        ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
+        ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
+        ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
+
+        fifo8_reset(&s->rx_fifo);
+        do {
+            data_size = len;
+            while (!fifo8_is_full(&s->rx_fifo) && (len > 0)) {
+                fifo8_push(&s->rx_fifo, (uint8_t)ssi_transfer(s->spi, 0));
+                --len;
+            }
+            if (data_size > fifo8_num_used(&s->rx_fifo)) {
+                data_size = fifo8_num_used(&s->rx_fifo);
+            }
+            const uint8_t *buf = fifo8_pop_buf(&s->rx_fifo, data_size, &data_size);
+            dma_memory_write(&address_space_memory, phys_addr,
+                             buf, data_size);
+            phys_addr += data_size;
+        } while (len > 0);
     }
+    qemu_set_irq(s->cs_line, 1);
 
     s->irqstat = true;
 }
@@ -185,8 +187,10 @@ static uint64_t quatro_fcspi_read(void *opaque, hwaddr offset, unsigned size)
     }
 
     uint64_t value = s->regs[index];
+#if 0
     qemu_log("%s: read 0x%" PRIx64 " from %s (offset 0x%" HWADDR_PRIx ")\n",
              TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
+#endif
     return value;
 }
 
@@ -237,8 +241,10 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
                  TYPE_QUATRO_FCSPI, offset);
         return;
     }
+#if 0
     qemu_log("%s: write 0x%" PRIx64 " to %s (offset 0x%" HWADDR_PRIx ")\n",
              TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
+#endif
 }
 
 static void quatro_fcspi_reset(DeviceState *dev)
@@ -248,6 +254,11 @@ static void quatro_fcspi_reset(DeviceState *dev)
     for (int i = 0; i < QUATRO_FCSPI_NUM_REGS; ++i) {
         s->regs[i] = quatro_fcspi_regs[i].reset_value;
     }
+
+    fifo8_reset(&s->tx_fifo);
+    fifo8_reset(&s->rx_fifo);
+    qemu_set_irq(s->irq, 0);
+    qemu_set_irq(s->cs_line, 0);
 }
 
 static void quatro_fcspi_realize(DeviceState *dev, Error **errp)
@@ -271,8 +282,8 @@ static void quatro_fcspi_realize(DeviceState *dev, Error **errp)
                           TYPE_QUATRO_FCSPI, QUATRO_FCSPI_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 
-    fifo32_create(&s->tx_fifo, FIFO_CAPACITY);
-    fifo32_create(&s->rx_fifo, FIFO_CAPACITY);
+    fifo8_create(&s->tx_fifo, FIFO_CAPACITY);
+    fifo8_create(&s->rx_fifo, FIFO_CAPACITY);
 }
 
 static void quatro_fcspi_class_init(ObjectClass *oc, void *data)

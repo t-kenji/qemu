@@ -32,7 +32,7 @@
 #include "qapi/error.h"
 
 #ifndef M25P80_ERR_DEBUG
-#define M25P80_ERR_DEBUG 7
+#define M25P80_ERR_DEBUG 0
 #endif
 
 #define DB_PRINT_L(level, ...) do { \
