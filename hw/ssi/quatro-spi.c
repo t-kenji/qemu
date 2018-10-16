@@ -142,11 +142,29 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
     uint32_t phys_addr = s->regs[DMA_SADDR];
     uint32_t data_size;
 
-    qemu_set_irq(s->cs_line, 0);
     if ((cst & (1 << FCSPI_DMA_CST__DIR_BIT)) != 0) {
         /* write */
+        qemu_set_irq(s->cs_line, 0);
+        ssi_transfer(s->spi, 0x02);
+        ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
+        ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
+        ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
+
+        do {
+            static uint8_t buf[FIFO_CAPACITY];
+            data_size = MIN(sizeof(buf), len);
+            dma_memory_read(&address_space_memory, phys_addr,
+                            buf, data_size);
+            for (uint32_t cur = 0; cur < data_size && len > 0; ++cur, --len) {
+                ssi_transfer(s->spi, buf[cur]);
+            }
+            phys_addr += data_size;
+        } while (len > 0);
+
+        qemu_set_irq(s->cs_line, 1);
     } else {
         /* read */
+        qemu_set_irq(s->cs_line, 0);
         ssi_transfer(s->spi, 0x03);
         ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
         ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
@@ -167,8 +185,9 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
                              buf, data_size);
             phys_addr += data_size;
         } while (len > 0);
+
+        qemu_set_irq(s->cs_line, 1);
     }
-    qemu_set_irq(s->cs_line, 1);
 
     s->irqstat = true;
 }
@@ -225,6 +244,10 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
     case DMA_CST:
         s->regs[DMA_CST] = (uint32_t)value;
         if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__TRANS_BIT)) {
+            qemu_set_irq(s->cs_line, 0);
+            ssi_transfer(s->spi, 0x06);
+            qemu_set_irq(s->cs_line, 1);
+
             quatro_fcspi_dma_transfer(s);
         }
         if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__RESET_BIT)) {
