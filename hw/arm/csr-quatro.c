@@ -112,7 +112,24 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO1_ADDR, NULL);
     sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
     sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, NULL);
+    sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.ttc", CSR_QUATRO_TTC0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.ttc", CSR_QUATRO_TTC1_ADDR, NULL);
     sysbus_create_simple(TYPE_SYSBUS_AHCI, CSR_QUATRO_SATA_ADDR, NULL);
+    sysbus_create_simple("quatro5500.sbe", CSR_QUATRO_SBE0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.sbe", CSR_QUATRO_SBE1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.fir", CSR_QUATRO_FIR0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.fir", CSR_QUATRO_FIR1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.scal", CSR_QUATRO_SCAL0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.scal", CSR_QUATRO_SCAL1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.scrn", CSR_QUATRO_SCRN0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.scrn", CSR_QUATRO_SCRN1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.jbig", CSR_QUATRO_JBIG0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.jbig", CSR_QUATRO_JBIG1_ADDR, NULL);
+    sysbus_create_simple("quatro5500.lcdc", CSR_QUATRO_LCDC_ADDR, NULL);
+    sysbus_create_simple("quatro5500.dsp", CSR_QUATRO_DSP0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.dsp", CSR_QUATRO_DSP1_ADDR, NULL);
     sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM30_ADDR, NULL);
 
     /* UARTs.

@@ -35,12 +35,44 @@
 #define TYPE_QUATRO_SDMCLK "quatro5500.sdmclk"
 #define QUATRO_SDMCLK(obj) OBJECT_CHECK(QuatroSDMClkState, (obj), TYPE_QUATRO_SDMCLK)
 
+#define TYPE_QUATRO_TTC "quatro5500.ttc"
+#define QUATRO_TTC(obj) OBJECT_CHECK(QuatroTTCState, (obj), TYPE_QUATRO_TTC)
+
+#define TYPE_QUATRO_SBE "quatro5500.sbe"
+#define QUATRO_SBE(obj) OBJECT_CHECK(QuatroSBEState, (obj), TYPE_QUATRO_SBE)
+
+#define TYPE_QUATRO_FIR "quatro5500.fir"
+#define QUATRO_FIR(obj) OBJECT_CHECK(QuatroFIRState, (obj), TYPE_QUATRO_FIR)
+
+#define TYPE_QUATRO_SCAL "quatro5500.scal"
+#define QUATRO_SCAL(obj) OBJECT_CHECK(QuatroSCALState, (obj), TYPE_QUATRO_SCAL)
+
+#define TYPE_QUATRO_SCRN "quatro5500.scrn"
+#define QUATRO_SCRN(obj) OBJECT_CHECK(QuatroSCRNState, (obj), TYPE_QUATRO_SCRN)
+
+#define TYPE_QUATRO_JBIG "quatro5500.jbig"
+#define QUATRO_JBIG(obj) OBJECT_CHECK(QuatroJBIGState, (obj), TYPE_QUATRO_JBIG)
+
+#define TYPE_QUATRO_LCDC "quatro5500.lcdc"
+#define QUATRO_LCDC(obj) OBJECT_CHECK(QuatroLCDCState, (obj), TYPE_QUATRO_LCDC)
+
+#define TYPE_QUATRO_DSP "quatro5500.dsp"
+#define QUATRO_DSP(obj) OBJECT_CHECK(QuatroDSPState, (obj), TYPE_QUATRO_DSP)
+
 enum QuatroPeripheralMemoryMap {
     QUATRO_PERI_A15GPF_MMIO_SIZE   = 0x10000,
     QUATRO_PERI_RSTGEN_MMIO_SIZE   = 0x10000,
     QUATRO_PERI_DDRMC_MMIO_SIZE    = 0x10000,
     QUATRO_PERI_SDIOCORE_MMIO_SIZE = 0x100,
     QUATRO_PERI_SDMCLK_MMIO_SIZE   = 0x10000,
+    QUATRO_PERI_TTC_MMIO_SIZE      = 0x20000,
+    QUATRO_PERI_SBE_MMIO_SIZE      = 0x10000,
+    QUATRO_PERI_FIR_MMIO_SIZE      = 0x10000,
+    QUATRO_PERI_SCAL_MMIO_SIZE     = 0x10000,
+    QUATRO_PERI_SCRN_MMIO_SIZE     = 0x10000,
+    QUATRO_PERI_JBIG_MMIO_SIZE     = 0x10000,
+    QUATRO_PERI_LCDC_MMIO_SIZE     = 0x10000,
+    QUATRO_PERI_DSP_MMIO_SIZE      = 0x100000,
 };
 
 typedef struct {
@@ -168,6 +200,70 @@ typedef struct {
     uint32_t regs[QUATRO_SDMCLK_NUM_REGS];
 } QuatroSDMClkState;
 
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroTTCState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroSBEState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroFIRState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroSCALState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroSCRNState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroJBIGState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroLCDCState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
+} QuatroDSPState;
+
 static const VMStateDescription quatro_a15gpf_vmstate = {
     .name = TYPE_QUATRO_A15GPF,
     .version_id = 1,
@@ -214,6 +310,78 @@ static const VMStateDescription quatro_sdmclk_vmstate = {
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
         VMSTATE_UINT32_ARRAY(regs, QuatroSDMClkState, QUATRO_SDMCLK_NUM_REGS),
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_ttc_vmstate = {
+    .name = TYPE_QUATRO_TTC,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_sbe_vmstate = {
+    .name = TYPE_QUATRO_SBE,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_fir_vmstate = {
+    .name = TYPE_QUATRO_FIR,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_scal_vmstate = {
+    .name = TYPE_QUATRO_SCAL,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_scrn_vmstate = {
+    .name = TYPE_QUATRO_SCRN,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_jbig_vmstate = {
+    .name = TYPE_QUATRO_JBIG,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_lcdc_vmstate = {
+    .name = TYPE_QUATRO_LCDC,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_dsp_vmstate = {
+    .name = TYPE_QUATRO_DSP,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
         VMSTATE_END_OF_LIST()
     },
 };
@@ -655,6 +823,333 @@ static void quatro_sdmclk_class_init(ObjectClass *oc, void *data)
     dc->vmsd = &quatro_sdmclk_vmstate;
 }
 
+static uint64_t quatro_ttc_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_TTC, offset);
+    return 0;
+}
+
+static void quatro_ttc_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_TTC, value, offset);
+}
+
+static void quatro_ttc_reset(DeviceState *dev)
+{
+}
+
+static void quatro_ttc_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_ttc_read,
+        .write = quatro_ttc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroTTCState *s = QUATRO_TTC(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_TTC, QUATRO_PERI_TTC_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_ttc_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_ttc_realize;
+    dc->reset   = quatro_ttc_reset;
+    dc->vmsd    = &quatro_ttc_vmstate;
+}
+
+static uint64_t quatro_sbe_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SBE, offset);
+    return 0;
+}
+
+static void quatro_sbe_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SBE, value, offset);
+}
+
+static void quatro_sbe_reset(DeviceState *dev)
+{
+}
+
+static void quatro_sbe_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_sbe_read,
+        .write = quatro_sbe_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroSBEState *s = QUATRO_SBE(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_SBE, QUATRO_PERI_SBE_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_sbe_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_sbe_realize;
+    dc->reset   = quatro_sbe_reset;
+    dc->vmsd    = &quatro_sbe_vmstate;
+}
+
+static uint64_t quatro_fir_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_FIR, offset);
+    return 0;
+}
+
+static void quatro_fir_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_FIR, value, offset);
+}
+
+static void quatro_fir_reset(DeviceState *dev)
+{
+}
+
+static void quatro_fir_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_fir_read,
+        .write = quatro_fir_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroFIRState *s = QUATRO_FIR(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_FIR, QUATRO_PERI_FIR_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_fir_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_fir_realize;
+    dc->reset   = quatro_fir_reset;
+    dc->vmsd    = &quatro_fir_vmstate;
+}
+
+static uint64_t quatro_scal_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SCAL, offset);
+    return 0;
+}
+
+static void quatro_scal_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SCAL, value, offset);
+}
+
+static void quatro_scal_reset(DeviceState *dev)
+{
+}
+
+static void quatro_scal_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_scal_read,
+        .write = quatro_scal_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroSCALState *s = QUATRO_SCAL(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_SCAL, QUATRO_PERI_SCAL_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_scal_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_scal_realize;
+    dc->reset   = quatro_scal_reset;
+    dc->vmsd    = &quatro_scal_vmstate;
+}
+
+static uint64_t quatro_scrn_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SCRN, offset);
+    return 0;
+}
+
+static void quatro_scrn_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_SCRN, value, offset);
+}
+
+static void quatro_scrn_reset(DeviceState *dev)
+{
+}
+
+static void quatro_scrn_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_scrn_read,
+        .write = quatro_scrn_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroSCRNState *s = QUATRO_SCRN(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_SCRN, QUATRO_PERI_SCRN_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_scrn_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_scrn_realize;
+    dc->reset   = quatro_scrn_reset;
+    dc->vmsd    = &quatro_scrn_vmstate;
+}
+
+static uint64_t quatro_jbig_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_JBIG, offset);
+    return 0;
+}
+
+static void quatro_jbig_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_JBIG, value, offset);
+}
+
+static void quatro_jbig_reset(DeviceState *dev)
+{
+}
+
+static void quatro_jbig_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_jbig_read,
+        .write = quatro_jbig_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroJBIGState *s = QUATRO_JBIG(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_JBIG, QUATRO_PERI_JBIG_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_jbig_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_jbig_realize;
+    dc->reset   = quatro_jbig_reset;
+    dc->vmsd    = &quatro_jbig_vmstate;
+}
+
+static uint64_t quatro_lcdc_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_LCDC, offset);
+    return 0;
+}
+
+static void quatro_lcdc_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_LCDC, value, offset);
+}
+
+static void quatro_lcdc_reset(DeviceState *dev)
+{
+}
+
+static void quatro_lcdc_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_lcdc_read,
+        .write = quatro_lcdc_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroLCDCState *s = QUATRO_LCDC(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_LCDC, QUATRO_PERI_LCDC_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_lcdc_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_lcdc_realize;
+    dc->reset   = quatro_lcdc_reset;
+    dc->vmsd    = &quatro_lcdc_vmstate;
+}
+
+static uint64_t quatro_dsp_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_DSP, offset);
+    return 0;
+}
+
+static void quatro_dsp_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_DSP, value, offset);
+}
+
+static void quatro_dsp_reset(DeviceState *dev)
+{
+}
+
+static void quatro_dsp_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_dsp_read,
+        .write = quatro_dsp_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroDSPState *s = QUATRO_DSP(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_DSP, QUATRO_PERI_DSP_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_dsp_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_dsp_realize;
+    dc->reset   = quatro_dsp_reset;
+    dc->vmsd    = &quatro_dsp_vmstate;
+}
 
 static void quatro_peripherals_register_types(void)
 {
@@ -688,12 +1183,68 @@ static void quatro_peripherals_register_types(void)
         .instance_size = sizeof(QuatroSDMClkState),
         .class_init = quatro_sdmclk_class_init,
     };
+    static const TypeInfo ttc_tinfo = {
+        .name = TYPE_QUATRO_TTC,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroTTCState),
+        .class_init = quatro_ttc_class_init,
+    };
+    static const TypeInfo sbe_tinfo = {
+        .name = TYPE_QUATRO_SBE,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroSBEState),
+        .class_init = quatro_sbe_class_init,
+    };
+    static const TypeInfo fir_tinfo = {
+        .name = TYPE_QUATRO_FIR,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroFIRState),
+        .class_init = quatro_fir_class_init,
+    };
+    static const TypeInfo scal_tinfo = {
+        .name = TYPE_QUATRO_SCAL,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroSCALState),
+        .class_init = quatro_scal_class_init,
+    };
+    static const TypeInfo scrn_tinfo = {
+        .name = TYPE_QUATRO_SCRN,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroSCRNState),
+        .class_init = quatro_scrn_class_init,
+    };
+    static const TypeInfo jbig_tinfo = {
+        .name = TYPE_QUATRO_JBIG,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroJBIGState),
+        .class_init = quatro_jbig_class_init,
+    };
+    static const TypeInfo lcdc_tinfo = {
+        .name = TYPE_QUATRO_LCDC,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroLCDCState),
+        .class_init = quatro_lcdc_class_init,
+    };
+    static const TypeInfo dsp_tinfo = {
+        .name = TYPE_QUATRO_DSP,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroDSPState),
+        .class_init = quatro_dsp_class_init,
+    };
 
     type_register_static(&a15gpf_tinfo);
     type_register_static(&rstgen_tinfo);
     type_register_static(&ddrmc_tinfo);
     type_register_static(&sdiocore_tinfo);
     type_register_static(&sdmclk_tinfo);
+    type_register_static(&ttc_tinfo);
+    type_register_static(&sbe_tinfo);
+    type_register_static(&fir_tinfo);
+    type_register_static(&scal_tinfo);
+    type_register_static(&scrn_tinfo);
+    type_register_static(&jbig_tinfo);
+    type_register_static(&lcdc_tinfo);
+    type_register_static(&dsp_tinfo);
 }
 
 type_init(quatro_peripherals_register_types)
