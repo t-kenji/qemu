@@ -36,6 +36,12 @@ enum QuatroFCSPIBits {
     FCSPI_DMA_CST__RESET_BIT = 24,
 };
 
+enum Quatro_FCSPIVals {
+    FCSPI_ACCRR1__ERASE_SECTOR = 0,
+    FCSPI_ACCRR1__ERASE_BLOCK = 1,
+    FCSPI_ACCRR1__ERASE_CHIP =2,
+};
+
 typedef struct {
     const char *name;
     hwaddr offset;
@@ -192,6 +198,28 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
     s->irqstat = true;
 }
 
+static void quatro_fcspi_erase(QuatroFCSPIState *s)
+{
+    switch (s->regs[ACCRR1]) {
+    case FCSPI_ACCRR1__ERASE_SECTOR:
+        qemu_set_irq(s->cs_line, 0);
+        ssi_transfer(s->spi, 0x20);
+        ssi_transfer(s->spi, (s->regs[ACCRR0] & 0x00FF0000) >> 16);
+        ssi_transfer(s->spi, (s->regs[ACCRR0] & 0x0000FF00) >>  8);
+        ssi_transfer(s->spi, (s->regs[ACCRR0] & 0x000000FF) >>  0);
+        qemu_set_irq(s->cs_line, 1);
+        break;
+    case FCSPI_ACCRR1__ERASE_BLOCK:
+        break;
+    case FCSPI_ACCRR1__ERASE_CHIP:
+        break;
+    default:
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: unknown erase type %d\n",
+                      TYPE_QUATRO_FCSPI, s->regs[ACCRR1]);
+        break;
+    }
+}
+
 static uint64_t quatro_fcspi_read(void *opaque, hwaddr offset, unsigned size)
 {
     QuatroFCSPIState *s = QUATRO_FCSPI(opaque);
@@ -224,8 +252,17 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
     case CTRL:
     case STAT:
     case ACCRR0:
+        s->regs[ACCRR0] = (uint32_t)value;
+        break;
     case ACCRR1:
+        s->regs[ACCRR1] = (uint32_t)value;
+        break;
     case ACCRR2:
+        s->regs[ACCRR2] = (uint32_t)value;
+        if (s->regs[ACCRR2] & 2) {
+            quatro_fcspi_erase(s);
+        }
+        break;
     case DDPM:
     case RWDATA:
     case FFSTAT:
