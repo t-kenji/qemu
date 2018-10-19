@@ -23,6 +23,8 @@
 #include "exec/address-spaces.h"
 #include "qemu/log.h"
 
+//#define USING_RAM
+
 #define TYPE_QUATRO_CM3 "quatro5500.cm3"
 #define QUATRO_CM3(obj) OBJECT_CHECK(QuatroCM3State, (obj), TYPE_QUATRO_CM3)
 
@@ -38,7 +40,9 @@ typedef struct {
     /*< public >*/
     ARMCPU cpu;
     NVICState nvic;
+#if defined(USING_RAM)
     MemoryRegion container;
+#endif
     MemoryRegion iomem;
 } QuatroCM3State;
 
@@ -75,8 +79,10 @@ static void quatro_cm3_realize(DeviceState *dev, Error **errp)
     s->cpu.env.nvic = &s->nvic;
     s->nvic.cpu = &s->cpu;
 
+#if defined(USING_RAM)
     object_property_set_link(OBJECT(&s->cpu), OBJECT(&s->container),
                              "memory", &error_abort);
+#endif
     object_property_set_bool(OBJECT(&s->cpu), true,
                              "start-powered-off", &error_abort);
     object_property_set_bool(OBJECT(&s->cpu), true,
@@ -89,8 +95,10 @@ static void quatro_cm3_realize(DeviceState *dev, Error **errp)
     SysBusDevice *sbd = SYS_BUS_DEVICE(&s->nvic);
     sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(DEVICE(&s->cpu), ARM_CPU_IRQ));
 
+#if defined(USING_RAM)
     memory_region_add_subregion(&s->container, 0xE000E000,
                                 sysbus_mmio_get_region(sbd, 0));
+#endif
 }
 
 static void quatro_cm3_init(Object *obj)
@@ -103,8 +111,10 @@ static void quatro_cm3_init(Object *obj)
 
     QuatroCM3State *s = QUATRO_CM3(obj);
 
+#if defined(USING_RAM)
     memory_region_init_ram(&s->container, obj, "quatro-cm3.container",
                            QUATRO_CM3_MEM_SIZE, &error_abort);
+#endif
     memory_region_init_io(&s->iomem, obj, &ops, s,
                           TYPE_QUATRO_CM3, QUATRO_CM3_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);

@@ -50,6 +50,9 @@
 #define TYPE_QUATRO_SCRN "quatro5500.scrn"
 #define QUATRO_SCRN(obj) OBJECT_CHECK(QuatroSCRNState, (obj), TYPE_QUATRO_SCRN)
 
+#define TYPE_QUATRO_LPRI "quatro5500.lpri"
+#define QUATRO_LPRI(obj) OBJECT_CHECK(QuatroLPRIState, (obj), TYPE_QUATRO_LPRI)
+
 #define TYPE_QUATRO_JBIG "quatro5500.jbig"
 #define QUATRO_JBIG(obj) OBJECT_CHECK(QuatroJBIGState, (obj), TYPE_QUATRO_JBIG)
 
@@ -70,6 +73,7 @@ enum QuatroPeripheralMemoryMap {
     QUATRO_PERI_FIR_MMIO_SIZE      = 0x10000,
     QUATRO_PERI_SCAL_MMIO_SIZE     = 0x10000,
     QUATRO_PERI_SCRN_MMIO_SIZE     = 0x10000,
+    QUATRO_PERI_LPRI_MMIO_SIZE     = 0x100000,
     QUATRO_PERI_JBIG_MMIO_SIZE     = 0x10000,
     QUATRO_PERI_LCDC_MMIO_SIZE     = 0x10000,
     QUATRO_PERI_DSP_MMIO_SIZE      = 0x100000,
@@ -246,6 +250,14 @@ typedef struct {
 
     /*< public >*/
     MemoryRegion iomem;
+} QuatroLPRIState;
+
+typedef struct {
+    /*< private >*/
+    SysBusDevice parent_obj;
+
+    /*< public >*/
+    MemoryRegion iomem;
 } QuatroJBIGState;
 
 typedef struct {
@@ -352,6 +364,15 @@ static const VMStateDescription quatro_scal_vmstate = {
 
 static const VMStateDescription quatro_scrn_vmstate = {
     .name = TYPE_QUATRO_SCRN,
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_END_OF_LIST()
+    },
+};
+
+static const VMStateDescription quatro_lpri_vmstate = {
+    .name = TYPE_QUATRO_LPRI,
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
@@ -1028,6 +1049,47 @@ static void quatro_scrn_class_init(ObjectClass *oc, void *data)
     dc->vmsd    = &quatro_scrn_vmstate;
 }
 
+static uint64_t quatro_lpri_read(void *opaque, hwaddr offset, unsigned size)
+{
+    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_LPRI, offset);
+    return 0;
+}
+
+static void quatro_lpri_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    DEBUGLOG("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx,
+             TYPE_QUATRO_LPRI, value, offset);
+}
+
+static void quatro_lpri_reset(DeviceState *dev)
+{
+}
+
+static void quatro_lpri_realize(DeviceState *dev, Error **errp)
+{
+    static const MemoryRegionOps ops = {
+        .read = quatro_lpri_read,
+        .write = quatro_lpri_write,
+        .endianness = DEVICE_LITTLE_ENDIAN,
+    };
+
+    QuatroLPRIState *s = QUATRO_LPRI(dev);
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_QUATRO_LPRI, QUATRO_PERI_LPRI_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+}
+
+static void quatro_lpri_class_init(ObjectClass *oc, void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(oc);
+
+    dc->realize = quatro_lpri_realize;
+    dc->reset   = quatro_lpri_reset;
+    dc->vmsd    = &quatro_lpri_vmstate;
+}
+
 static uint64_t quatro_jbig_read(void *opaque, hwaddr offset, unsigned size)
 {
     DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
@@ -1213,6 +1275,12 @@ static void quatro_peripherals_register_types(void)
         .instance_size = sizeof(QuatroSCRNState),
         .class_init = quatro_scrn_class_init,
     };
+    static const TypeInfo lpri_tinfo = {
+        .name = TYPE_QUATRO_LPRI,
+        .parent = TYPE_SYS_BUS_DEVICE,
+        .instance_size = sizeof(QuatroLPRIState),
+        .class_init = quatro_lpri_class_init,
+    };
     static const TypeInfo jbig_tinfo = {
         .name = TYPE_QUATRO_JBIG,
         .parent = TYPE_SYS_BUS_DEVICE,
@@ -1242,6 +1310,7 @@ static void quatro_peripherals_register_types(void)
     type_register_static(&fir_tinfo);
     type_register_static(&scal_tinfo);
     type_register_static(&scrn_tinfo);
+    type_register_static(&lpri_tinfo);
     type_register_static(&jbig_tinfo);
     type_register_static(&lcdc_tinfo);
     type_register_static(&dsp_tinfo);

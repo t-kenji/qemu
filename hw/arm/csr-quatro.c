@@ -126,11 +126,13 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
     sysbus_create_simple("quatro5500.scrn", CSR_QUATRO_SCRN0_ADDR, NULL);
     sysbus_create_simple("quatro5500.scrn", CSR_QUATRO_SCRN1_ADDR, NULL);
     sysbus_create_simple("quatro5500.jbig", CSR_QUATRO_JBIG0_ADDR, NULL);
+    sysbus_create_simple("quatro5500.lpri", CSR_QUATRO_LPRI0_ADDR, NULL);
     sysbus_create_simple("quatro5500.jbig", CSR_QUATRO_JBIG1_ADDR, NULL);
     sysbus_create_simple("quatro5500.lcdc", CSR_QUATRO_LCDC_ADDR, NULL);
     sysbus_create_simple("quatro5500.dsp", CSR_QUATRO_DSP0_ADDR, NULL);
     sysbus_create_simple("quatro5500.dsp", CSR_QUATRO_DSP1_ADDR, NULL);
     sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM30_ADDR, NULL);
+    sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM31_ADDR, NULL);
 
     /* UARTs.
      */
