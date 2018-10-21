@@ -111,7 +111,7 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO0_ADDR, NULL);
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO1_ADDR, NULL);
     sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
-    sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, NULL);
+    sysbus_create_simple("stmmaceth", CSR_QUATRO_ETHERNET_ADDR, qdev_get_gpio_in(DEVICE(&ms->a7mpcore), 126 - 32)),
     sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA0_ADDR, NULL);
     sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA1_ADDR, NULL);
     sysbus_create_simple("quatro5500.ttc", CSR_QUATRO_TTC0_ADDR, NULL);
