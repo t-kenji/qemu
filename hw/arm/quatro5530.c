@@ -24,6 +24,7 @@
 #include "hw/ssi/ssi.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
+#include "net/net.h"
 #include "qemu/error-report.h"
 #include "qemu/log.h"
 #include "exec/address-spaces.h"
@@ -130,6 +131,16 @@ static void quatro5530_init(MachineState *machine)
         qdev_init_nofail(flashdev);
         sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
                            qdev_get_gpio_in_named(flashdev, SSI_GPIO_CS, 0));
+    }
+
+    if (nd_table[0].used) {
+        qemu_check_nic_model(&nd_table[0], "stmmaceth");
+        DeviceState *dev = qdev_create(NULL, "stmmaceth");
+        SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+        qdev_set_nic_properties(dev, &nd_table[0]);
+        qdev_init_nofail(dev);
+        sysbus_mmio_map(sbd, 0, CSR_QUATRO_ETHERNET_ADDR);
+        sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(DEVICE(&ms->soc.a7mpcore), CSR_QUATRO_STMMAC_IRQ));
     }
 
     memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",

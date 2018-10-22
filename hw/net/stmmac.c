@@ -17,6 +17,7 @@
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
 #include "net/net.h"
+#include "sysemu/dma.h"
 #include "qemu/log.h"
 
 #define TYPE_STMMAC "stmmaceth"
@@ -24,13 +25,23 @@
 
 enum STMMACMemoryMap {
     STMMAC_MMIO_SIZE = 0x9000,
+    STMMAC_FRAME_SIZE = 0x2000,
 };
 
 enum STMMACValues {
     DMA_BUS_MODE_SFT_RESET = 0x00000001,
     DMA_STATUS_TI          = 0x00000001,
     DMA_STATUS_RI          = 0x00000040,
+    DMA_STATUS_RU          = 0x00000080,
+    DMA_STATUS_AIS         = 0x00008000,
     DMA_STATUS_NIS         = 0x00010000,
+    DMA_CTRL_SR            = 0x00000002,
+    DMA_CTRL_ST            = 0x00002000,
+    DMA_DESC_LAST_DESC     = 0x00000100,
+    DMA_DESC_1ST_DESC      = 0x00000200,
+    DMA_DESC_END_RING      = 0x00200000,
+    DMA_DESC_LAST_SEG      = 0x20000000,
+    DMA_DESC_OWNERED       = 0x80000000,
 };
 
 enum STMMACMIIValues {
@@ -67,7 +78,6 @@ enum STMMACRegs {
     MMC_RX_IPC_INT_MASK,
     DMA_BUS_MODE,
     DMA_TX_POLL_DEMAND,
-    DMA_RX_POLL_DEMAND,
     DMA_RX_BASE_ADDR,
     DMA_TX_BASE_ADDR,
     DMA_STATUS,
@@ -99,7 +109,6 @@ static const STMMACReg mac_regs[] = {
     REG_ITEM(MMC_RX_IPC_INT_MASK, 0x0200, 0x00000000),
     REG_ITEM(DMA_BUS_MODE,        0x1000, 0x00000000),
     REG_ITEM(DMA_TX_POLL_DEMAND,  0x1004, 0x00000000),
-    REG_ITEM(DMA_RX_POLL_DEMAND,  0x1008, 0x00000000),
     REG_ITEM(DMA_RX_BASE_ADDR,    0x100C, 0x00000000),
     REG_ITEM(DMA_TX_BASE_ADDR,    0x1010, 0x00000000),
     REG_ITEM(DMA_STATUS,          0x1014, 0x00000000),
@@ -155,6 +164,28 @@ static const STMMACReg mii_regs[] = {
 
 #undef REG_ITEM
 
+struct dma_desc {
+    uint32_t ctrl_stat;
+    uint16_t buffer1_size;
+    uint16_t buffer2_size;
+    uint32_t buffer1_addr;
+    uint32_t buffer2_addr;
+    uint32_t ext_stat;
+    uint32_t reserve;
+    uint32_t timestamp_lo;
+    uint32_t timestamp_hi;
+};
+
+struct rx_tx_stats {
+    uint64_t rx_bytes;
+    uint64_t tx_bytes;
+
+    uint64_t rx_count;
+    uint64_t rx_count_bcast;
+    uint64_t rx_count_mcast;
+    uint64_t tx_count;
+};
+
 typedef struct {
     /*< private >*/
     SysBusDevice parent_obj;
@@ -164,15 +195,36 @@ typedef struct {
     qemu_irq irq;
     NICState *nic;
     NICConf conf;
+    struct rx_tx_stats stats;
+    uint32_t cur_rx_desc_addr;
+    uint32_t cur_tx_desc_addr;
     uint32_t mac_regs[STMMAC_NUM_REGS];
     uint16_t mii_regs[MII_NUM_REGS];
 } STMMACState;
+
+static const VMStateDescription stats_vmstate = {
+    .name = TYPE_STMMAC "-stats",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .fields = (VMStateField[]){
+        VMSTATE_UINT64(rx_bytes, struct rx_tx_stats),
+        VMSTATE_UINT64(tx_bytes, struct rx_tx_stats),
+        VMSTATE_UINT64(rx_count, struct rx_tx_stats),
+        VMSTATE_UINT64(rx_count_bcast, struct rx_tx_stats),
+        VMSTATE_UINT64(rx_count_mcast, struct rx_tx_stats),
+        VMSTATE_UINT64(tx_count, struct rx_tx_stats),
+        VMSTATE_END_OF_LIST()
+    },
+};
 
 static const VMStateDescription stmmac_vmstate = {
     .name = TYPE_STMMAC,
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
+        VMSTATE_STRUCT(stats, STMMACState, 0, stats_vmstate, struct rx_tx_stats),
+        VMSTATE_UINT32(cur_rx_desc_addr, STMMACState),
+        VMSTATE_UINT32(cur_tx_desc_addr, STMMACState),
         VMSTATE_UINT32_ARRAY(mac_regs, STMMACState, STMMAC_NUM_REGS),
         VMSTATE_UINT16_ARRAY(mii_regs, STMMACState, MII_NUM_REGS),
         VMSTATE_END_OF_LIST()
@@ -264,6 +316,140 @@ static void mii_write(STMMACState *s, uint8_t addr, uint8_t reg, uint16_t value)
         qemu_log("%s(mii): Bad write %#x to addr %#x reg %#x\n",
                  TYPE_STMMAC, value, addr, reg);
         return;
+    }
+#if 0
+    qemu_log("%s(mii): write %#x to addr %#x %s (reg %#x)\n",
+             TYPE_STMMAC, value, addr, mii_regs[index].name, reg);
+#endif
+}
+
+static void stmmac_update_irq(STMMACState *s)
+{
+    int level = s->mac_regs[DMA_STATUS] & s->mac_regs[DMA_INT_ENA];
+    qemu_set_irq(s->irq, level);
+}
+
+static void stmmac_read_desc(STMMACState *s, struct dma_desc *desc, bool is_rx)
+{
+    uint32_t phys_addr = is_rx ? s->cur_rx_desc_addr : s->cur_tx_desc_addr;
+    dma_memory_read(&address_space_memory, phys_addr, desc, sizeof(*desc));
+}
+
+static void stmmac_write_desc(STMMACState *s, struct dma_desc *desc, bool is_rx)
+{
+    uint32_t phys_addr = is_rx ? s->cur_rx_desc_addr : s->cur_tx_desc_addr;
+
+    if (is_rx) {
+        if ((desc->buffer1_size & 0x8000) != 0) {
+            s->cur_rx_desc_addr = s->mac_regs[DMA_RX_BASE_ADDR];
+        } else {
+            s->cur_rx_desc_addr += sizeof(*desc);
+        }
+    } else {
+        if ((desc->ctrl_stat & DMA_DESC_END_RING) != 0) {
+            s->cur_tx_desc_addr = s->mac_regs[DMA_TX_BASE_ADDR];
+        } else {
+            s->cur_tx_desc_addr += sizeof(*desc);
+        }
+    }
+    dma_memory_write(&address_space_memory, phys_addr, desc, sizeof(*desc));
+}
+
+static int stmmac_can_receive(NetClientState *nc)
+{
+    STMMACState *s = qemu_get_nic_opaque(nc);
+    return (s->mac_regs[DMA_CTRL] & DMA_CTRL_SR) ? 1 : 0;
+}
+
+static ssize_t stmmac_receive(NetClientState *nc, const uint8_t *buf, size_t size)
+{
+    static const uint8_t sa_bcast[] = {
+        0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+    };
+
+    STMMACState *s = qemu_get_nic_opaque(nc);
+    bool is_uni = ~buf[0] & 0x01;
+    bool is_bcast = memcmp(buf, sa_bcast, sizeof(sa_bcast));
+    bool is_mcast = !is_uni && !is_bcast;
+    struct dma_desc desc;
+    ssize_t ret = size;
+
+    do {
+        if (size < 12) {
+            s->mac_regs[DMA_STATUS] |= DMA_STATUS_NIS | DMA_STATUS_RI;
+            ret = -1;
+            break;
+        }
+
+        stmmac_read_desc(s, &desc, true);
+        if ((desc.ctrl_stat & DMA_DESC_OWNERED) == 0) {
+            s->mac_regs[DMA_STATUS] |= DMA_STATUS_AIS | DMA_STATUS_RU;
+            break;
+        }
+
+        dma_memory_write(&address_space_memory, desc.buffer1_addr, buf, size);
+
+        desc.ctrl_stat = (size << 16) | DMA_DESC_1ST_DESC | DMA_DESC_LAST_DESC;
+        stmmac_write_desc(s, &desc, true);
+
+        /* update stats */
+        s->stats.rx_bytes += size;
+        ++s->stats.rx_count;
+        if (is_mcast) {
+            ++s->stats.rx_count_mcast;
+        } else if (is_bcast) {
+            ++s->stats.rx_count_bcast;
+        }
+
+        s->mac_regs[DMA_STATUS] |= DMA_STATUS_NIS | DMA_STATUS_RI;
+    } while (0);
+
+    stmmac_update_irq(s);
+
+    return ret;
+}
+
+static void stmmac_enet_send(STMMACState *s)
+{
+    static uint8_t frame[STMMAC_FRAME_SIZE];
+
+    struct dma_desc desc;
+    uint8_t *cur;
+    size_t frame_size;
+    size_t frag_size;
+
+    cur = frame;
+    frame_size = 0;
+
+    while (1) {
+        stmmac_read_desc(s, &desc, false);
+        if ((desc.ctrl_stat & DMA_DESC_OWNERED) == 0) {
+            break;
+        }
+
+        frag_size = (desc.buffer1_size & 0xFFF) + (desc.buffer2_size & 0xFFF);
+        if (frag_size >= sizeof(frame)) {
+            qemu_log_mask(LOG_GUEST_ERROR,
+                          "%s: buffer overflow %zu read into %zu buffer",
+                          TYPE_STMMAC, frag_size, sizeof(frame));
+        }
+
+        dma_memory_read(&address_space_memory, desc.buffer1_addr, cur, frag_size);
+        cur += frag_size;
+        frame_size += frag_size;
+        if (desc.ctrl_stat & DMA_DESC_LAST_SEG) {
+            /* update stats */
+            s->stats.tx_bytes += frame_size;
+            ++s->stats.tx_count;
+
+            qemu_send_packet(qemu_get_queue(s->nic), frame, frame_size);
+            cur = frame;
+            frame_size = 0;
+            s->mac_regs[DMA_STATUS] |= DMA_STATUS_NIS | DMA_STATUS_TI;
+        }
+
+        desc.ctrl_stat &= ~DMA_DESC_OWNERED;
+        stmmac_write_desc(s, &desc, false);
     }
 }
 
@@ -357,20 +543,15 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
         s->mac_regs[DMA_BUS_MODE] = (uint32_t)value;
         break;
     case DMA_TX_POLL_DEMAND:
-        s->mac_regs[DMA_TX_POLL_DEMAND] = (uint32_t)value;
-        if (s->mac_regs[DMA_TX_POLL_DEMAND] != 0) {
-            s->mac_regs[DMA_STATUS] |= DMA_STATUS_NIS | DMA_STATUS_TI;
-            qemu_irq_raise(s->irq);
-        }
-        break;
-    case DMA_RX_POLL_DEMAND:
-        s->mac_regs[DMA_RX_POLL_DEMAND] = (uint32_t)value;
+        stmmac_enet_send(s);
         break;
     case DMA_RX_BASE_ADDR:
         s->mac_regs[DMA_RX_BASE_ADDR] = (uint32_t)value;
+        s->cur_rx_desc_addr = s->mac_regs[DMA_RX_BASE_ADDR];
         break;
     case DMA_TX_BASE_ADDR:
         s->mac_regs[DMA_TX_BASE_ADDR] = (uint32_t)value;
+        s->cur_tx_desc_addr = s->mac_regs[DMA_TX_BASE_ADDR];
         break;
     case DMA_STATUS:
         s->mac_regs[DMA_STATUS] &= ~(uint32_t)value;
@@ -380,6 +561,9 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
         break;
     case DMA_CTRL:
         s->mac_regs[DMA_CTRL] = (uint32_t)value;
+        if (stmmac_can_receive(qemu_get_queue(s->nic))) {
+            qemu_flush_queued_packets(qemu_get_queue(s->nic));
+        }
         break;
     case DMA_INT_ENA:
         s->mac_regs[DMA_INT_ENA] = (uint32_t)value;
@@ -401,28 +585,12 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
                  TYPE_STMMAC, value, offset);
         return;
     }
+
 #if 0
     qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_STMMAC, value, mac_regs[index].name, offset);
 #endif
-}
-
-static int stmmac_can_receive(NetClientState *nc)
-{
-    //STMMACState *s = qemu_get_nic_opaque(nc);
-
-    qemu_log("%s: can_receive ?\n", TYPE_STMMAC);
-
-    return 0;
-}
-
-static ssize_t stmmac_receive(NetClientState *nc, const uint8_t *buf, size_t size)
-{
-    //STMMACState *s = qemu_get_nic_opaque(nc);
-
-    qemu_log("%s: receive\n", TYPE_STMMAC);
-
-    return size;
+    stmmac_update_irq(s);
 }
 
 static void stmmac_reset(DeviceState *dev)
@@ -430,14 +598,26 @@ static void stmmac_reset(DeviceState *dev)
     STMMACState *s = STMMAC(dev);
     MACAddr mac = s->conf.macaddr;
 
+    s->stats.rx_bytes = 0;
+    s->stats.tx_bytes = 0;
+    s->stats.rx_count = 0;
+    s->stats.rx_count_bcast = 0;
+    s->stats.rx_count_mcast = 0;
+    s->stats.tx_count = 0;
+    s->cur_rx_desc_addr = 0;
+    s->cur_tx_desc_addr = 0;
     for (int i = 0; i < STMMAC_NUM_REGS; ++i) {
         s->mac_regs[i] = mac_regs[i].reset_value;
     }
     for (int i = 0; i < MII_NUM_REGS; ++i) {
         s->mii_regs[i] = mii_regs[i].reset_value;
     }
-    s->mac_regs[GMAC_ADDR_HI] = (mac.a[5] << 8) | mac.a[4];
-    s->mac_regs[GMAC_ADDR_LO] = (mac.a[3] << 24) | (mac.a[2] << 16) | (mac.a[1] << 8) | mac.a[0];
+    s->mac_regs[GMAC_ADDR_HI] = (mac.a[5] << 8)
+                                | mac.a[4];
+    s->mac_regs[GMAC_ADDR_LO] = (mac.a[3] << 24)
+                                | (mac.a[2] << 16)
+                                | (mac.a[1] << 8)
+                                | mac.a[0];
 }
 
 static void stmmac_realize(DeviceState *dev, Error **errp)
