@@ -36,6 +36,18 @@ typedef struct {
     MemoryRegion ram;
 } CsrQuatro5530;
 
+static void write_board_setup(ARMCPU *cpu, const struct arm_boot_info *info)
+{
+    uint32_t board_setup_blob[] = {
+        0xE59F1004, /* ldr r1, [pc, #4] */
+        0xEE0E1F10, /* mcr p15, 0, r1, c14, c0, 0 */
+        0xE12FFF1E, /* bx lr */
+        0x016E3600, /* .word #24000000 */
+    };
+    rom_add_blob_fixed("board-setup", board_setup_blob,
+                       sizeof(board_setup_blob), 0x80001000);
+}
+
 static void write_smpboot(ARMCPU *cpu, const struct arm_boot_info *info)
 {
     static const uint32_t smpboot[] = {
@@ -76,6 +88,10 @@ static void quatro5530_init(MachineState *machine)
         .initrd_filename = machine->initrd_filename,
         .nb_cpus = MIN(smp_cpus, MAX_CPUS),
 
+        .board_setup_addr = 0x80001000,
+        .write_board_setup = write_board_setup,
+        .secure_board_setup = true,
+        .secure_boot = true,
         .smp_loader_start = 0,
         .write_secondary_boot = write_smpboot,
         .secondary_cpu_reset_hook = reset_secondary,
