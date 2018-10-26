@@ -17,6 +17,7 @@
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
 #include "net/net.h"
+#include "net/checksum.h"
 #include "sysemu/dma.h"
 #include "qemu/log.h"
 
@@ -40,6 +41,7 @@ enum STMMACValues {
     DMA_DESC_LAST_DESC     = 0x00000100,
     DMA_DESC_1ST_DESC      = 0x00000200,
     DMA_DESC_END_RING      = 0x00200000,
+    DMA_DESC_CSUM_INS      = 0x00C00000,
     DMA_DESC_LAST_SEG      = 0x20000000,
     DMA_DESC_OWNERED       = 0x80000000,
 };
@@ -140,7 +142,7 @@ static const STMMACReg mii_regs[] = {
      * Autoneg | 10-half | 10-full | 100-half | 100-full
      * 1000-half | 1000-full
      */
-    REG_ITEM(MII_BMSR,      0x01, 0x7900),
+    REG_ITEM(MII_BMSR,      0x01, 0x7904),
     REG_ITEM(MII_PHYSID1,   0x02, 0x1234),
     REG_ITEM(MII_PHYSID2,   0x03, 0x5678),
     /*
@@ -280,6 +282,9 @@ static uint16_t mii_read(STMMACState *s, uint8_t addr, uint8_t reg)
             break;
         case MII_STAT1000:
             value = s->mii_regs[MII_STAT1000];
+            break;
+        case MII_ESTATUS:
+            value = s->mii_regs[MII_ESTATUS];
             break;
         default:
             break;
@@ -442,6 +447,9 @@ static void stmmac_enet_send(STMMACState *s)
             s->stats.tx_bytes += frame_size;
             ++s->stats.tx_count;
 
+            if ((desc.ctrl_stat & DMA_DESC_CSUM_INS) != 0) {
+                net_checksum_calculate(frame, frame_size);
+            }
             qemu_send_packet(qemu_get_queue(s->nic), frame, frame_size);
             cur = frame;
             frame_size = 0;
@@ -660,6 +668,7 @@ static void stmmac_class_init(ObjectClass *oc, void *data)
     dc->reset   = stmmac_reset;
     dc->vmsd    = &stmmac_vmstate;
     dc->props   = props;
+    set_bit(DEVICE_CATEGORY_NETWORK, dc->categories);
 }
 
 static void stmmac_register_types(void)
