@@ -16,6 +16,7 @@
 
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
+#include "hw/net/mii.h"
 #include "net/net.h"
 #include "net/checksum.h"
 #include "sysemu/dma.h"
@@ -47,11 +48,26 @@ enum STMMACValues {
 };
 
 enum STMMACMIIValues {
-    MII_BUSY          = 0x0001,
-    BMCR_RESET        = 0x8000,
-    BMSR_LSTATE       = 0x0004,
-    BMSR_AUTONEG_CMPL = 0x0020,
+    MII_BUSY = 0x0001,
 };
+
+#define MII_BMCR_INIT (MII_BMCR_AUTOEN | MII_BMCR_FD \
+                       | MII_BMCR_SPEED1000)
+
+#define MII_BMSR_INIT (MII_BMSR_100TX_FD | MII_BMSR_100TX_HD \
+                       | MII_BMSR_10T_FD | MII_BMSR_10T_HD \
+                       | MII_BMSR_EXTSTAT | MII_BMSR_MFPS \
+                       | MII_BMSR_AN_COMP | MII_BMSR_AUTONEG \
+                       | MII_BMSR_LINK_ST | MII_BMSR_EXTCAP)
+
+#define MII_ANAR_INIT (MII_ANAR_PAUSE_ASYM | MII_ANAR_PAUSE \
+                       | MII_ANAR_TXFD | MII_ANAR_TX \
+                       | MII_ANAR_10FD | MII_ANAR_10)
+
+#define MII_ANLPAR_INIT (MII_ANLPAR_ACK | MII_ANLPAR_PAUSE \
+                         | MII_ANLPAR_TXFD | MII_ANLPAR_TX \
+                         | MII_ANLPAR_10FD | MII_ANLPAR_10 \
+                         | MII_ANLPAR_CSMACD)
 
 typedef struct {
     const char *name;
@@ -69,6 +85,7 @@ enum STMMACRegs {
     GMAC_HASH_LO,
     GMAC_MII_ADDR,
     GMAC_MII_DATA,
+    GMAC_FLOW_CTRL,
     GMAC_VER,
     GMAC_INT_STATUS,
     GMAC_INT_MASK,
@@ -100,6 +117,7 @@ static const STMMACReg mac_regs[] = {
     REG_ITEM(GMAC_HASH_LO,        0x000C, 0x00000000),
     REG_ITEM(GMAC_MII_ADDR,       0x0010, 0x00000000),
     REG_ITEM(GMAC_MII_DATA,       0x0014, 0x00000000),
+    REG_ITEM(GMAC_FLOW_CTRL,      0x0018, 0x00000000),
     REG_ITEM(GMAC_VER,            0x0020, 0x00001037),
     REG_ITEM(GMAC_INT_STATUS,     0x0038, 0x00000000),
     REG_ITEM(GMAC_INT_MASK,       0x003C, 0x00000000),
@@ -123,46 +141,19 @@ static const STMMACReg mac_regs[] = {
     REG_ITEM(DMA_HW_FEAT,         0x1058, 0x01050A03),
 };
 
-enum MIIRegs {
-    MII_BMCR,
-    MII_BMSR,
-    MII_PHYSID1,
-    MII_PHYSID2,
-    MII_ADVERTISE,
-    MII_LPA,
-    MII_CTRL1000,
-    MII_STAT1000,
-    MII_ESTATUS,
-    MII_NUM_REGS
+static const STMMACReg mii_regs[] = {
+    REG_ITEM(MII_BMCR,     0x00, MII_BMCR_INIT),
+    REG_ITEM(MII_BMSR,     0x01, MII_BMSR_INIT),
+    REG_ITEM(MII_PHYID1,   0x02, 0x1234),
+    REG_ITEM(MII_PHYID2,   0x03, 0x5678),
+    REG_ITEM(MII_ANAR,     0x04, MII_ANAR_INIT),
+    REG_ITEM(MII_ANLPAR,   0x05, MII_ANLPAR_INIT),
+    REG_ITEM(MII_CTRL1000, 0x09, MII_CTRL1000_FULL | MII_CTRL1000_HALF),
+    REG_ITEM(MII_STAT1000, 0x0A, MII_STAT1000_FULL | MII_STAT1000_HALF),
+    REG_ITEM(MII_EXTSTAT,  0x0F, 0x3000),
 };
 
-static const STMMACReg mii_regs[] = {
-    REG_ITEM(MII_BMCR,    0x00, 0x0000),
-    /*
-     * Autoneg | 10-half | 10-full | 100-half | 100-full
-     * 1000-half | 1000-full
-     */
-    REG_ITEM(MII_BMSR,      0x01, 0x7904),
-    REG_ITEM(MII_PHYSID1,   0x02, 0x1234),
-    REG_ITEM(MII_PHYSID2,   0x03, 0x5678),
-    /*
-     * 10-half | 10-full | 100-half | 100-full
-     */
-    REG_ITEM(MII_ADVERTISE, 0x04, 0x0060),
-    /*
-     * 10-half | 10-full | 100-half | 100-full
-     */
-    REG_ITEM(MII_LPA,       0x05, 0x0180),
-    /*
-     * 1000-half | 1000-full
-     */
-    REG_ITEM(MII_CTRL1000,  0x09, 0x0300),
-    /*
-     * 1000-half | 1000-full
-     */
-    REG_ITEM(MII_STAT1000,  0x0A, 0x0C00),
-    REG_ITEM(MII_ESTATUS,   0x0F, 0x3000),
-};
+#define MII_NUM_REGS ARRAY_SIZE(mii_regs)
 
 #undef REG_ITEM
 
@@ -251,7 +242,9 @@ static uint16_t mii_read(STMMACState *s, uint8_t addr, uint8_t reg)
     int index = stmmac_offset_to_index(mii_regs, MII_NUM_REGS, reg);
 
     if (index < 0) {
-        qemu_log("%s(mii): Bad read addr %#x reg %#x\n", TYPE_STMMAC, addr, reg);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s(mii): Bad read addr %#x reg %#x\n",
+                      TYPE_STMMAC, addr, reg);
         return 0;
     }
 
@@ -260,22 +253,22 @@ static uint16_t mii_read(STMMACState *s, uint8_t addr, uint8_t reg)
         switch (index) {
         case MII_BMCR:
             value = s->mii_regs[MII_BMCR];
-            s->mii_regs[MII_BMCR] &= ~BMCR_RESET;
+            s->mii_regs[MII_BMCR] &= ~MII_BMCR_RESET;
             break;
         case MII_BMSR:
             value = s->mii_regs[MII_BMSR];
             break;
-        case MII_PHYSID1:
-            value = s->mii_regs[MII_PHYSID1];
+        case MII_PHYID1:
+            value = s->mii_regs[MII_PHYID1];
             break;
-        case MII_PHYSID2:
-            value = s->mii_regs[MII_PHYSID2];
+        case MII_PHYID2:
+            value = s->mii_regs[MII_PHYID2];
             break;
-        case MII_ADVERTISE:
-            value = s->mii_regs[MII_ADVERTISE];
+        case MII_ANAR:
+            value = s->mii_regs[MII_ANAR];
             break;
-        case MII_LPA:
-            value = s->mii_regs[MII_LPA];
+        case MII_ANLPAR:
+            value = s->mii_regs[MII_ANLPAR];
             break;
         case MII_CTRL1000:
             value = s->mii_regs[MII_CTRL1000];
@@ -283,8 +276,8 @@ static uint16_t mii_read(STMMACState *s, uint8_t addr, uint8_t reg)
         case MII_STAT1000:
             value = s->mii_regs[MII_STAT1000];
             break;
-        case MII_ESTATUS:
-            value = s->mii_regs[MII_ESTATUS];
+        case MII_EXTSTAT:
+            value = s->mii_regs[MII_EXTSTAT];
             break;
         default:
             break;
@@ -304,12 +297,13 @@ static void mii_write(STMMACState *s, uint8_t addr, uint8_t reg, uint16_t value)
     switch (index) {
     case MII_BMCR:
         s->mii_regs[MII_BMCR] = value;
-        if (s->mii_regs[MII_BMCR] & BMCR_RESET) {
-            s->mii_regs[MII_BMSR] |= BMSR_LSTATE | BMSR_AUTONEG_CMPL;
+        if (s->mii_regs[MII_BMCR] & MII_BMCR_RESET) {
+            s->mii_regs[MII_BMCR] = MII_BMCR_INIT;
+            s->mii_regs[MII_BMSR] = MII_BMSR_INIT;
         }
         break;
-    case MII_ADVERTISE:
-        s->mii_regs[MII_ADVERTISE] = value;
+    case MII_ANAR:
+        s->mii_regs[MII_ANAR] = value;
         break;
     case MII_CTRL1000:
         s->mii_regs[MII_CTRL1000] = value;
@@ -318,8 +312,9 @@ static void mii_write(STMMACState *s, uint8_t addr, uint8_t reg, uint16_t value)
         s->mii_regs[MII_STAT1000] = value;
         break;
     default:
-        qemu_log("%s(mii): Bad write %#x to addr %#x reg %#x\n",
-                 TYPE_STMMAC, value, addr, reg);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s(mii): Bad write %#x to addr %#x reg %#x\n",
+                      TYPE_STMMAC, value, addr, reg);
         return;
     }
 #if 0
@@ -435,7 +430,7 @@ static void stmmac_enet_send(STMMACState *s)
         frag_size = (desc.buffer1_size & 0xFFF) + (desc.buffer2_size & 0xFFF);
         if (frag_size >= sizeof(frame)) {
             qemu_log_mask(LOG_GUEST_ERROR,
-                          "%s: buffer overflow %zu read into %zu buffer",
+                          "%s: buffer overflow %zu read into %zu buffer\n",
                           TYPE_STMMAC, frag_size, sizeof(frame));
         }
 
@@ -467,8 +462,9 @@ static uint64_t stmmac_read(void *opaque, hwaddr offset, unsigned size)
     int index = stmmac_offset_to_index(mac_regs, STMMAC_NUM_REGS, offset);
 
     if (index < 0) {
-        qemu_log("%s: Bad read offset %#" HWADDR_PRIx "\n",
-                 TYPE_STMMAC, offset);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s: Bad read offset %#" HWADDR_PRIx "\n",
+                      TYPE_STMMAC, offset);
         return 0;
     }
 
@@ -523,6 +519,9 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
     case GMAC_MII_DATA:
         s->mac_regs[GMAC_MII_DATA] = (uint32_t)value;
         break;
+    case GMAC_FLOW_CTRL:
+        s->mac_regs[GMAC_FLOW_CTRL] = (uint32_t)value;
+        break;
     case GMAC_VER:
         s->mac_regs[GMAC_VER] = (uint32_t)value;
         break;
@@ -563,9 +562,6 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
         break;
     case DMA_STATUS:
         s->mac_regs[DMA_STATUS] &= ~(uint32_t)value;
-        if (s->mac_regs[DMA_STATUS] == 0) {
-            qemu_irq_lower(s->irq);
-        }
         break;
     case DMA_CTRL:
         s->mac_regs[DMA_CTRL] = (uint32_t)value;
@@ -589,8 +585,9 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
         s->mac_regs[GMAC_TCPD] = (uint32_t)value;
         break;
     default:
-        qemu_log("%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx "\n",
-                 TYPE_STMMAC, value, offset);
+        qemu_log_mask(LOG_GUEST_ERROR,
+                      "%s: Bad write %#" PRIx64 " to offset %#" HWADDR_PRIx "\n",
+                      TYPE_STMMAC, value, offset);
         return;
     }
 
@@ -644,15 +641,15 @@ static void stmmac_realize(DeviceState *dev, Error **errp)
 
     STMMACState *s = STMMAC(dev);
 
+    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
+                          TYPE_STMMAC, STMMAC_MMIO_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
+    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
+
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
     s->nic = qemu_new_nic(&net_info, &s->conf,
                           object_get_typename(OBJECT(dev)), dev->id, s);
     qemu_format_nic_info_str(qemu_get_queue(s->nic), s->conf.macaddr.a);
-
-    sysbus_init_irq(SYS_BUS_DEVICE(dev), &s->irq);
-    memory_region_init_io(&s->iomem, OBJECT(s), &ops, s,
-                          TYPE_STMMAC, STMMAC_MMIO_SIZE);
-    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->iomem);
 }
 
 static void stmmac_class_init(ObjectClass *oc, void *data)
