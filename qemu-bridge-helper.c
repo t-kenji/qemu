@@ -57,7 +57,7 @@ typedef QSIMPLEQ_HEAD(ACLList, ACLRule) ACLList;
 static void usage(void)
 {
     fprintf(stderr,
-            "Usage: qemu-bridge-helper [--use-vnet] --br=bridge --fd=unixfd\n");
+            "Usage: qemu-bridge-helper [--use-vnet] [--acl=aclfile] --br=bridge --fd=unixfd\n");
 }
 
 static int parse_acl_file(const char *filename, ACLList *acl_list)
@@ -223,6 +223,7 @@ int main(int argc, char **argv)
     int use_vnet = 0;
     int mtu;
     const char *bridge = NULL;
+    const char *acl = DEFAULT_ACL_FILE;
     char iface[IFNAMSIZ];
     int index;
     ACLRule *acl_rule;
@@ -249,6 +250,8 @@ int main(int argc, char **argv)
             bridge = &argv[index][5];
         } else if (strncmp(argv[index], "--fd=", 5) == 0) {
             unixfd = atoi(&argv[index][5]);
+        } else if (strncmp(argv[index], "--acl=", 6) == 0) {
+            acl = &argv[index][6];
         } else {
             usage();
             return EXIT_FAILURE;
@@ -262,9 +265,8 @@ int main(int argc, char **argv)
 
     /* parse default acl file */
     QSIMPLEQ_INIT(&acl_list);
-    if (parse_acl_file(DEFAULT_ACL_FILE, &acl_list) == -1) {
-        fprintf(stderr, "failed to parse default acl file `%s'\n",
-                DEFAULT_ACL_FILE);
+    if (parse_acl_file(acl, &acl_list) == -1) {
+        fprintf(stderr, "failed to parse default acl file `%s'\n", acl);
         ret = EXIT_FAILURE;
         goto cleanup;
     }

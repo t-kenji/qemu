@@ -22,6 +22,8 @@
 #include "sysemu/dma.h"
 #include "qemu/log.h"
 
+//#define ENABLE_DEBUG
+
 #define TYPE_STMMAC "stmmaceth"
 #define STMMAC(obj) OBJECT_CHECK(STMMACState, (obj), TYPE_STMMAC)
 
@@ -283,7 +285,7 @@ static uint16_t mii_read(STMMACState *s, uint8_t addr, uint8_t reg)
             break;
         }
     }
-#if 0
+#if defined(ENABLE_DEBUG)
     qemu_log("%s(mii): read %#x from addr %#x %s (reg %#x)\n",
              TYPE_STMMAC, value, addr, mii_regs[index].name, reg);
 #endif
@@ -317,7 +319,7 @@ static void mii_write(STMMACState *s, uint8_t addr, uint8_t reg, uint16_t value)
                       TYPE_STMMAC, value, addr, reg);
         return;
     }
-#if 0
+#if defined(ENABLE_DEBUG)
     qemu_log("%s(mii): write %#x to addr %#x %s (reg %#x)\n",
              TYPE_STMMAC, value, addr, mii_regs[index].name, reg);
 #endif
@@ -478,7 +480,7 @@ static uint64_t stmmac_read(void *opaque, hwaddr offset, unsigned size)
     default:
         break;
     }
-#if 0
+#if defined(ENABLE_DEBUG)
     qemu_log("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_STMMAC, value, mac_regs[index].name, offset);
 #endif
@@ -591,7 +593,7 @@ static void stmmac_write(void *opaque, hwaddr offset, uint64_t value, unsigned s
         return;
     }
 
-#if 0
+#if defined(ENABLE_DEBUG)
     qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_STMMAC, value, mac_regs[index].name, offset);
 #endif
