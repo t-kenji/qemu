@@ -19,12 +19,14 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#define TYPE_XHCI "base-xhci"
+#ifndef HW_USB_HCD_XHCI_H
+#define HW_USB_HCD_XHCI_H
+
+#define TYPE_PCI_XHCI "pci-xhci-usb"
+#define PCI_XHCI(obj) OBJECT_CHECK(XHCIPCIState, (obj), TYPE_PCI_XHCI)
+
 #define TYPE_NEC_XHCI "nec-usb-xhci"
 #define TYPE_QEMU_XHCI "qemu-xhci"
-
-#define XHCI(obj) \
-    OBJECT_CHECK(XHCIState, (obj), TYPE_XHCI)
 
 #define MAXPORTS_2 15
 #define MAXPORTS_3 15
@@ -36,7 +38,7 @@
 /* Very pessimistic, let's hope it's enough for all cases */
 #define EV_QUEUE (((3 * 24) + 16) * MAXSLOTS)
 
-typedef struct XHCIState XHCIState;
+typedef struct XHCIPCIState XHCIPCIState;
 typedef struct XHCIStreamContext XHCIStreamContext;
 typedef struct XHCIEPContext XHCIEPContext;
 
@@ -128,7 +130,7 @@ typedef struct XHCIRing {
 } XHCIRing;
 
 typedef struct XHCIPort {
-    XHCIState *xhci;
+    XHCIPCIState *xhci;
     uint32_t portsc;
     uint32_t portnr;
     USBPort  *uport;
@@ -178,7 +180,7 @@ typedef struct XHCIInterrupter {
 
 } XHCIInterrupter;
 
-struct XHCIState {
+struct XHCIPCIState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
@@ -224,3 +226,5 @@ struct XHCIState {
 
     bool nec_quirks;
 };
+
+#endif /* HW_USB_HCD_XHCI_H */
