@@ -180,17 +180,53 @@ typedef struct XHCIInterrupter {
 
 } XHCIInterrupter;
 
+struct XHCIState {
+    USBBus bus;
+    DeviceState *device;
+    MemoryRegion mem;
+    AddressSpace *as;
+    MemoryRegion mem_cap;
+    MemoryRegion mem_oper;
+    MemoryRegion mem_runtime;
+    MemoryRegion mem_doorbell;
+
+    /* properties */
+    uint32_t numports_2;
+    uint32_t numports_3;
+    uint32_t numintrs;
+    uint32_t numslots;
+    uint32_t flags;
+    uint32_t max_pstreams_mask;
+
+    /* Operational Registers */
+    uint32_t usbcmd;
+    uint32_t usbsts;
+    uint32_t dnctrl;
+    uint32_t crcr_low;
+    uint32_t crcr_high;
+    uint32_t dcbaap_low;
+    uint32_t dcbaap_high;
+    uint32_t config;
+
+    USBPort  uports[MAX(MAXPORTS_2, MAXPORTS_3)];
+    XHCIPort ports[MAXPORTS];
+    XHCISlot slots[MAXSLOTS];
+    uint32_t numports;
+
+    /* Runtime Registers */
+    int64_t mfindex_start;
+    QEMUTimer *mfwrap_timer;
+    XHCIInterrupter intr[MAXINTRS];
+
+    XHCIRing cmd_ring;
+};
+
 struct XHCIPCIState {
     /*< private >*/
     PCIDevice parent_obj;
     /*< public >*/
 
-    USBBus bus;
-    MemoryRegion mem;
-    MemoryRegion mem_cap;
-    MemoryRegion mem_oper;
-    MemoryRegion mem_runtime;
-    MemoryRegion mem_doorbell;
+    XHCIState xhci;
 
     /* properties */
     uint32_t numports_2;
