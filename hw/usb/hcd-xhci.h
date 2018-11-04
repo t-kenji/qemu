@@ -22,11 +22,26 @@
 #ifndef HW_USB_HCD_XHCI_H
 #define HW_USB_HCD_XHCI_H
 
+#include "sysemu/dma.h"
+#include "hw/usb.h"
+#include "hw/pci/pci.h"
+#include "hw/sysbus.h"
+
 #define TYPE_PCI_XHCI "pci-xhci-usb"
 #define PCI_XHCI(obj) OBJECT_CHECK(XHCIPCIState, (obj), TYPE_PCI_XHCI)
 
 #define TYPE_NEC_XHCI "nec-usb-xhci"
 #define TYPE_QEMU_XHCI "qemu-xhci"
+
+#define TYPE_SYS_BUS_XHCI "sysbus-xhci-usb"
+#define SYS_BUS_XHCI(obj) \
+    OBJECT_CHECK(XHCISysBusState, (obj), TYPE_SYS_BUS_XHCI)
+#define SYS_BUS_XHCI_CLASS(klass) \
+    OBJECT_CLASS_CHECK(XHCISysBusClass, (klass), TYPE_SYS_BUS_XHCI)
+#define SYS_BUS_XHCI_GET_CLASS(obj) \
+    OBJECT_GET_CLASS(XHCISysBusClass, (obj), TYPE_SYS_BUS_XHCI)
+
+#define TYPE_QUATRO5500_XHCI "quatro5500-xhci-usb"
 
 #define MAXPORTS_2 15
 #define MAXPORTS_3 15
@@ -38,9 +53,12 @@
 /* Very pessimistic, let's hope it's enough for all cases */
 #define EV_QUEUE (((3 * 24) + 16) * MAXSLOTS)
 
-typedef struct XHCIPCIState XHCIPCIState;
+typedef struct XHCIState XHCIState;
 typedef struct XHCIStreamContext XHCIStreamContext;
 typedef struct XHCIEPContext XHCIEPContext;
+typedef struct XHCIPCIState XHCIPCIState;
+typedef struct XHCISysBusClass XHCISysBusClass;
+typedef struct XHCISysBusState XHCISysBusState;
 
 enum xhci_flags {
     XHCI_FLAG_SS_FIRST = 1,
@@ -130,7 +148,7 @@ typedef struct XHCIRing {
 } XHCIRing;
 
 typedef struct XHCIPort {
-    XHCIPCIState *xhci;
+    XHCIState *xhci;
     uint32_t portsc;
     uint32_t portnr;
     USBPort  *uport;
@@ -185,6 +203,7 @@ struct XHCIState {
     DeviceState *device;
     MemoryRegion mem;
     AddressSpace *as;
+    PCIDevice *pci;
     MemoryRegion mem_cap;
     MemoryRegion mem_oper;
     MemoryRegion mem_runtime;
@@ -219,48 +238,37 @@ struct XHCIState {
     XHCIInterrupter intr[MAXINTRS];
 
     XHCIRing cmd_ring;
+
+    bool nec_quirks;
 };
 
 struct XHCIPCIState {
     /*< private >*/
-    PCIDevice parent_obj;
+    PCIDevice pci_dev;
     /*< public >*/
 
     XHCIState xhci;
 
     /* properties */
-    uint32_t numports_2;
-    uint32_t numports_3;
-    uint32_t numintrs;
-    uint32_t numslots;
-    uint32_t flags;
-    uint32_t max_pstreams_mask;
     OnOffAuto msi;
     OnOffAuto msix;
+};
 
-    /* Operational Registers */
-    uint32_t usbcmd;
-    uint32_t usbsts;
-    uint32_t dnctrl;
-    uint32_t crcr_low;
-    uint32_t crcr_high;
-    uint32_t dcbaap_low;
-    uint32_t dcbaap_high;
-    uint32_t config;
+struct XHCISysBusState {
+    /*< private >*/
+    SysBusDevice parent_obj;
+    /*< public >*/
 
-    USBPort  uports[MAX(MAXPORTS_2, MAXPORTS_3)];
-    XHCIPort ports[MAXPORTS];
-    XHCISlot slots[MAXSLOTS];
-    uint32_t numports;
+    XHCIState xhci;
+};
 
-    /* Runtime Registers */
-    int64_t mfindex_start;
-    QEMUTimer *mfwrap_timer;
-    XHCIInterrupter intr[MAXINTRS];
+struct XHCISysBusClass {
+    /*< privaet >*/
+    SysBusDeviceClass parent_class;
+    /*< public >*/
 
-    XHCIRing cmd_ring;
-
-    bool nec_quirks;
+    uint32_t numports_2;
+    uint32_t numports_3;
 };
 
 #endif /* HW_USB_HCD_XHCI_H */

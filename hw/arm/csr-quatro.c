@@ -20,7 +20,7 @@
 #include "hw/arm/csr-quatro.h"
 #include "hw/char/serial.h"
 #include "hw/ide/ahci.h"
-#include "hw/usb/hcd-ehci.h"
+#include "hw/usb/hcd-xhci.h"
 #include "exec/address-spaces.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
@@ -110,7 +110,7 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
     sysbus_create_simple("quatro5500.a15gpf", CSR_QUATRO_A15GPF_ADDR, NULL);
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO0_ADDR, NULL);
     sysbus_create_simple("quatro5500.sdiocore", CSR_QUATRO_SDIO1_ADDR, NULL);
-    sysbus_create_simple(TYPE_QUATRO5500_EHCI, CSR_QUATRO_USBH_ADDR, NULL);
+    sysbus_create_simple(TYPE_QUATRO5500_XHCI, CSR_QUATRO_USBH_ADDR, NULL);
     sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA0_ADDR, NULL);
     sysbus_create_simple("quatro5500.gpdma", CSR_QUATRO_GPDMA1_ADDR, NULL);
     sysbus_create_simple("quatro5500.ttc", CSR_QUATRO_TTC0_ADDR, NULL);
