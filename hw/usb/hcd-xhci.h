@@ -243,6 +243,15 @@ struct XHCIState {
     bool nec_quirks;
 };
 
+extern const VMStateDescription vmstate_xhci;
+
+void usb_xhci_init(XHCIState *xhci, DeviceState *dev);
+void usb_xhci_realize(XHCIState *xhci, DeviceState *dev, Error **errp);
+void usb_xhci_unrealize(XHCIState *xhci, DeviceState *dev, Error **errp);
+void usb_xhci_reset(XHCIState *xhci);
+bool xhci_get_flag(XHCIState *xhci, enum xhci_flags bit);
+void xhci_set_flag(XHCIState *xhci, enum xhci_flags bit);
+
 struct XHCIPCIState {
     /*< private >*/
     PCIDevice pci_dev;
