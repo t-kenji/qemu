@@ -201,6 +201,7 @@ typedef struct XHCIInterrupter {
 struct XHCIState {
     USBBus bus;
     DeviceState *device;
+    qemu_irq irq;
     MemoryRegion mem;
     AddressSpace *as;
     PCIDevice *pci;

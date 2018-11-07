@@ -561,9 +561,7 @@ static void xhci_intx_update(XHCIState *xhci)
     }
 
     trace_usb_xhci_irq_intx(level);
-    if (xhci->pci != NULL) {
-        pci_set_irq(xhci->pci, level);
-    }
+    qemu_set_irq(xhci->irq, level);
 }
 
 static void xhci_msix_update(XHCIState *xhci, int v)
@@ -621,11 +619,11 @@ static void xhci_intr_raise(XHCIState *xhci, int v)
             msi_notify(xhci->pci, v);
             return;
         }
+    }
 
-        if (v == 0) {
-            trace_usb_xhci_irq_intx(1);
-            pci_irq_assert(xhci->pci);
-        }
+    if (v == 0) {
+        trace_usb_xhci_irq_intx(1);
+        qemu_irq_raise(xhci->irq);
     }
 }
 
@@ -2069,7 +2067,7 @@ static TRBCCode xhci_address_slot(XHCIState *xhci, unsigned int slotid,
     assert(slotid >= 1 && slotid <= xhci->numslots);
 
     dcbaap = xhci_addr64(xhci->dcbaap_low, xhci->dcbaap_high);
-    poctx = ldq_le_pci_dma(PCI_DEVICE(xhci), dcbaap + 8 * slotid);
+    poctx = ldq_le_dma(xhci->as, dcbaap + 8 * slotid);
     ictx = xhci_mask64(pictx);
     octx = xhci_mask64(poctx);
 
@@ -2768,7 +2766,6 @@ static uint64_t xhci_cap_read(void *ptr, hwaddr reg, unsigned size)
         ret = 0;
     }
 
-qemu_log("%s: read %#" PRIx32 " from %#" HWADDR_PRIx "\n", __func__, ret, reg);
     trace_usb_xhci_cap_read(reg, ret);
     return ret;
 }
@@ -2792,7 +2789,6 @@ static uint64_t xhci_port_read(void *ptr, hwaddr reg, unsigned size)
         ret = 0;
     }
 
-qemu_log("%s: read %#" PRIx32 " from %#" HWADDR_PRIx "\n", __func__, ret, reg);
     trace_usb_xhci_port_read(port->portnr, reg, ret);
     return ret;
 }
@@ -2803,7 +2799,6 @@ static void xhci_port_write(void *ptr, hwaddr reg,
     XHCIPort *port = ptr;
     uint32_t portsc, notify;
 
-qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, reg);
     trace_usb_xhci_port_write(port->portnr, reg, val);
 
     switch (reg) {
@@ -2903,7 +2898,6 @@ static uint64_t xhci_oper_read(void *ptr, hwaddr reg, unsigned size)
         ret = 0;
     }
 
-qemu_log("%s: read %#" PRIx32 " from %#" HWADDR_PRIx "\n", __func__, ret, reg);
     trace_usb_xhci_oper_read(reg, ret);
     return ret;
 }
@@ -2913,7 +2907,6 @@ static void xhci_oper_write(void *ptr, hwaddr reg,
 {
     XHCIState *xhci = ptr;
 
-qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, reg);
     trace_usb_xhci_oper_write(reg, val);
 
     switch (reg) {
@@ -3021,7 +3014,6 @@ static uint64_t xhci_runtime_read(void *ptr, hwaddr reg,
         }
     }
 
-qemu_log("%s: read %#" PRIx32 " from %#" HWADDR_PRIx "\n", __func__, ret, reg);
     trace_usb_xhci_runtime_read(reg, ret);
     return ret;
 }
@@ -3032,7 +3024,6 @@ static void xhci_runtime_write(void *ptr, hwaddr reg,
     XHCIState *xhci = ptr;
     int v = (reg - 0x20) / 0x20;
     XHCIInterrupter *intr = &xhci->intr[v];
-qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, reg);
     trace_usb_xhci_runtime_write(reg, val);
 
     if (reg < 0x20) {
@@ -3097,7 +3088,6 @@ static uint64_t xhci_doorbell_read(void *ptr, hwaddr reg,
                                    unsigned size)
 {
     /* doorbells always read as 0 */
-qemu_log("%s: read %#" PRIx64 " from %#" HWADDR_PRIx "\n", __func__, 0L, reg);
     trace_usb_xhci_doorbell_read(reg, 0);
     return 0;
 }
@@ -3108,7 +3098,6 @@ static void xhci_doorbell_write(void *ptr, hwaddr reg,
     XHCIState *xhci = ptr;
     unsigned int epid, streamid;
 
-qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, reg);
     trace_usb_xhci_doorbell_write(reg, val);
 
     if (!xhci_running(xhci)) {
@@ -3142,7 +3131,6 @@ qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, reg);
 static void xhci_cap_write(void *opaque, hwaddr addr, uint64_t val,
                            unsigned width)
 {
-qemu_log("%s: write %#" PRIx64 " to %#" HWADDR_PRIx "\n", __func__, val, addr);
     /* nothing */
 }
 
@@ -3337,7 +3325,7 @@ qemu_log("%s:%d:%s\n", __FILE__, __LINE__, __func__);
             continue;
         }
         slot->ctx =
-            xhci_mask64(ldq_le_pci_dma(xhci->pci, dcbaap + 8 * slotid));
+            xhci_mask64(ldq_le_dma(xhci->as, dcbaap + 8 * slotid));
         xhci_dma_read_u32s(xhci, slot->ctx, slot_ctx, sizeof(slot_ctx));
         slot->uport = xhci_lookup_uport(xhci, slot_ctx);
         if (!slot->uport) {
@@ -3616,6 +3604,7 @@ static void usb_xhci_pci_realize(struct PCIDevice *dev, Error **errp)
     }
 
     xhci->as = pci_get_address_space(dev);
+    xhci->irq = pci_allocate_irq(dev);
     xhci->pci = dev;
 
     usb_xhci_realize(xhci, DEVICE(dev), NULL);
@@ -3796,6 +3785,7 @@ static void usb_xhci_sysbus_realize(DeviceState *dev, Error **errp)
     }
 
     xhci->as = &address_space_memory;
+    sysbus_init_irq(SYS_BUS_DEVICE(dev), &xhci->irq);
 
     usb_xhci_realize(xhci, dev, errp);
 }
@@ -3842,8 +3832,9 @@ static void xhci_sysbus_init(Object *obj)
         xhci->numports_3 = MAXPORTS_3;
     }
 
-    xhci->as = &address_space_memory;
     xhci->numports = xhci->numports_2 + xhci->numports_3;
+    xhci->numintrs = MAXINTRS;
+    xhci->numslots = MAXSLOTS;
 
     usb_xhci_init(xhci, DEVICE(obj));
     sysbus_init_mmio(sbd, &xhci->mem);
@@ -3870,7 +3861,7 @@ static const TypeInfo xhci_sysbus_info = {
     .class_init    = xhci_sysbus_class_init,
 };
 
-static void xhci_quatro5500_class_init(ObjectClass *oc, void *data)
+static void quatro5500_xhci_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
     XHCISysBusClass *xsc = SYS_BUS_XHCI_CLASS(oc);
@@ -3880,10 +3871,21 @@ static void xhci_quatro5500_class_init(ObjectClass *oc, void *data)
     xsc->numports_3 = 0;
 }
 
-static const TypeInfo xhci_quatro5500_info = {
+static void quatro5500_xhci_instance_init(Object *obj)
+{
+    XHCISysBusState *s = SYS_BUS_XHCI(obj);
+    XHCIState *xhci = &s->xhci;
+
+    xhci->numintrs = MAXINTRS;
+    xhci->numslots = MAXSLOTS;
+    xhci_set_flag(xhci, XHCI_FLAG_SS_FIRST);
+}
+
+static const TypeInfo quatro5500_xhci_info = {
     .name       = TYPE_QUATRO5500_XHCI,
     .parent     = TYPE_SYS_BUS_XHCI,
-    .class_init = xhci_quatro5500_class_init,
+    .class_init = quatro5500_xhci_class_init,
+    .instance_init = quatro5500_xhci_instance_init,
 };
 
 static void xhci_register_types(void)
@@ -3891,7 +3893,7 @@ static void xhci_register_types(void)
     type_register_static(&xhci_pci_info);
     type_register_static(&qemu_xhci_info);
     type_register_static(&xhci_sysbus_info);
-    type_register_static(&xhci_quatro5500_info);
+    type_register_static(&quatro5500_xhci_info);
 }
 
 type_init(xhci_register_types)
