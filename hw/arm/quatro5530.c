@@ -66,9 +66,9 @@ static void reset_secondary(ARMCPU *cpu, const struct arm_boot_info *info)
     cpu_set_pc(cs, info->smp_loader_start);
 }
 
-static void quatro5530_sdhci_init(CsrQuatroState *s)
+static void quatro5530_sdhci_init(CsrQuatroState *s, int port_num)
 {
-    for (int i = 0; i < CSR_QUATRO_NUM_SDHCIS; ++i) {
+    for (int i = 0; i < port_num; ++i) {
         static const struct {
             hwaddr offset;
             int irq;
@@ -165,7 +165,7 @@ static void quatro5530_init(MachineState *machine)
     object_property_set_bool(OBJECT(&ms->soc), true, "realized",
                              &error_fatal);
 
-    quatro5530_sdhci_init(&ms->soc);
+    quatro5530_sdhci_init(&ms->soc, CSR_QUATRO_NUM_SDHCIS);
     quatro5530_fcspi_init(&ms->soc);
     quatro5530_stmmac_init(&ms->soc);
 
