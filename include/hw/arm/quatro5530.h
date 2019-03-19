@@ -22,5 +22,6 @@ typedef struct {
 } CsrQuatro5530;
 
 void quatro5530_sdhci_init(CsrQuatroState *s, int port_num);
-void quatro5530_fcspi_init(CsrQuatroState *s);
+void quatro5530_fcspi_init(CsrQuatroState *s, hwaddr addr);
+void quatro5530_spi_init(CsrQuatroState *s, hwaddr addr);
 void quatro5530_stmmac_init(CsrQuatroState *s);

@@ -60,12 +60,12 @@ void quatro5530_sdhci_init(CsrQuatroState *s, int port_num)
     }
 }
 
-void quatro5530_fcspi_init(CsrQuatroState *s)
+void quatro5530_fcspi_init(CsrQuatroState *s, hwaddr addr)
 {
     DeviceState *dev = qdev_create(NULL, "quatro5500.fcspi");
     qdev_init_nofail(dev);
 
-    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, CSR_QUATRO_FCSPI_ADDR);
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
                        qdev_get_gpio_in(DEVICE(&s->a7mpcore),
                                         CSR_QUATRO_FCSPI_IRQ));
@@ -74,6 +74,26 @@ void quatro5530_fcspi_init(CsrQuatroState *s)
     BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
     SSIBus *bus = (SSIBus *)qdev_get_child_bus(dev, "spi");
     DeviceState *flashdev = ssi_create_slave_no_init(bus, "n25q512a");
+    qdev_prop_set_drive(flashdev, "drive", blk, &error_abort);
+    qdev_init_nofail(flashdev);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
+                       qdev_get_gpio_in_named(flashdev, SSI_GPIO_CS, 0));
+}
+
+void quatro5530_spi_init(CsrQuatroState *s, hwaddr addr)
+{
+    DeviceState *dev = qdev_create(NULL, "quatro5500.spi");
+    qdev_init_nofail(dev);
+
+    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0,
+                       qdev_get_gpio_in(DEVICE(&s->a7mpcore),
+                                        CSR_QUATRO_SPI_IRQ));
+
+    DriveInfo *di = drive_get_next(IF_MTD);
+    BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
+    SSIBus *bus = (SSIBus *)qdev_get_child_bus(dev, "spi");
+    DeviceState *flashdev = ssi_create_slave_no_init(bus, "at25fs010");
     qdev_prop_set_drive(flashdev, "drive", blk, &error_abort);
     qdev_init_nofail(flashdev);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
@@ -161,7 +181,8 @@ static void quatro5530_init(MachineState *machine)
                              &error_fatal);
 
     quatro5530_sdhci_init(&ms->soc, CSR_QUATRO_NUM_SDHCIS);
-    quatro5530_fcspi_init(&ms->soc);
+    quatro5530_fcspi_init(&ms->soc, CSR_QUATRO_FCSPI_ADDR);
+    quatro5530_fcspi_init(&ms->soc, CSR_QUATRO_SPI_ADDR);
     quatro5530_stmmac_init(&ms->soc);
 
     memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",

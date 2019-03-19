@@ -99,6 +99,10 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
                            qdev_get_gpio_in(cpu, ARM_CPU_IRQ));
         sysbus_connect_irq(sbd, i + num_cpu,
                            qdev_get_gpio_in(cpu, ARM_CPU_FIQ));
+        sysbus_connect_irq(sbd, i + 2 * num_cpu,
+                           qdev_get_gpio_in(cpu, ARM_CPU_VIRQ));
+        sysbus_connect_irq(sbd, i + 3 * num_cpu,
+                           qdev_get_gpio_in(cpu, ARM_CPU_VFIQ));
     }
 
     sysbus_create_simple("quatro5500.rstgen", CSR_QUATRO_RSTGEN_ADDR, NULL);
