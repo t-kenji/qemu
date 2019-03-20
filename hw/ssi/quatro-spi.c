@@ -47,7 +47,11 @@ enum Quatro_FCSPIVals {
 };
 
 enum QuatroSPIBits {
-    SPICMD_START = 31,
+    SPICMD__DA = 14,
+    SPICMD__START = 31,
+    SPIDCTL__RB = 10,
+    SPIDCTL__NW = 9,
+    SPIDCTL__NA = 8,
 };
 
 typedef struct {
@@ -218,13 +222,18 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
     uint32_t cst = s->regs[DMA_CST];
     uint32_t len = s->regs[DMA_LEN];
     uint32_t faddr = s->regs[DMA_FADDR];
-    uint32_t phys_addr = s->regs[DMA_SADDR];
+    dma_addr_t phys_addr = s->regs[DMA_SADDR];
     uint32_t data_size;
 
     if ((cst & (1 << FCSPI_DMA_CST__DIR_BIT)) != 0) {
+        /* Switch to write enable. */
+        qemu_set_irq(s->cs_line, 0);
+        ssi_transfer(s->spi, 0x06);
+        qemu_set_irq(s->cs_line, 1);
+
         /* write */
         qemu_set_irq(s->cs_line, 0);
-        ssi_transfer(s->spi, 0x02);
+        ssi_transfer(s->spi, 0x02);     /* FIXME: may be data alignment. */
         ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
         ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
         ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
@@ -241,10 +250,15 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
         } while (len > 0);
 
         qemu_set_irq(s->cs_line, 1);
+
+        /* Switch to write disable. */
+        qemu_set_irq(s->cs_line, 0);
+        ssi_transfer(s->spi, 0x04);
+        qemu_set_irq(s->cs_line, 1);
     } else {
         /* read */
         qemu_set_irq(s->cs_line, 0);
-        ssi_transfer(s->spi, 0x03);
+        ssi_transfer(s->spi, 0x03);     /* FIXME: may be data alignment. */
         ssi_transfer(s->spi, (faddr & 0x00FF0000) >> 16);
         ssi_transfer(s->spi, (faddr & 0x0000FF00) >>  8);
         ssi_transfer(s->spi, (faddr & 0x000000FF) >>  0);
@@ -301,14 +315,14 @@ static uint64_t quatro_fcspi_read(void *opaque, hwaddr offset, unsigned size)
                                            offset);
 
     if (index < 0) {
-        qemu_log("%s: Bad read offset 0x%" HWADDR_PRIx "\n",
+        qemu_log("%s: Bad read offset %#" HWADDR_PRIx "\n",
                  TYPE_QUATRO_FCSPI, offset);
         return 0;
     }
 
     uint64_t value = s->regs[index];
 #if 0
-    qemu_log("%s: read 0x%" PRIx64 " from %s (offset 0x%" HWADDR_PRIx ")\n",
+    qemu_log("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
 #endif
     return value;
@@ -354,10 +368,6 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
     case DMA_CST:
         s->regs[DMA_CST] = (uint32_t)value;
         if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__TRANS_BIT)) {
-            qemu_set_irq(s->cs_line, 0);
-            ssi_transfer(s->spi, 0x06);
-            qemu_set_irq(s->cs_line, 1);
-
             quatro_fcspi_dma_transfer(s);
         }
         if (s->regs[DMA_CST] & (1 << FCSPI_DMA_CST__RESET_BIT)) {
@@ -370,12 +380,12 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
     case DMA_SPARE:
         break;
     default:
-        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+        qemu_log("%s: Bad write offset %#" HWADDR_PRIx "\n",
                  TYPE_QUATRO_FCSPI, offset);
         return;
     }
 #if 0
-    qemu_log("%s: write 0x%" PRIx64 " to %s (offset 0x%" HWADDR_PRIx ")\n",
+    qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
 #endif
 }
@@ -474,13 +484,64 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
         s->regs[index] = (uint32_t)value;
         break;
     case SPICMD0:
-        if (value & (1 << SPICMD_START)) {
-            if (fifo8_num_used(&s->tx_fifo) > 0) {
-                uint8_t tx = fifo8_pop(&s->tx_fifo);
-                qemu_log("%s: tx: %02x\n", TYPE_QUATRO_SPI, tx);
-                fifo8_reset(&s->rx_fifo);
-                fifo8_push(&s->rx_fifo, 0);
+        if (value & (1 << SPICMD__START)) {
+            uint32_t write_bytes = ((((uint32_t)value >> 16) & 0x1FFF) + 1) >> 3;
+            uint32_t read_bytes = (((uint32_t)value & 0x1FFF) + 1) >> 3;
+
+            qemu_set_irq(s->cs_line, 0);
+            if (write_bytes > 0) {
+                if (s->regs[SPIDCTL] & (1 << SPIDCTL__NW)) {
+                    fifo8_reset(&s->rx_fifo);
+                    do {
+                        uint8_t tx = fifo8_pop(&s->tx_fifo);
+                        uint32_t rx = ssi_transfer(s->spi, tx);
+                        fifo8_push(&s->rx_fifo, rx);
+                        --write_bytes;
+                    } while (write_bytes > 0);
+                } else {
+                    static uint8_t buf[FIFO_CAPACITY];
+                    dma_addr_t phys_addr = s->regs[SPIDADDR];
+
+                    memset(buf, 0, sizeof(buf));
+
+                    if (!(value & (1 << SPICMD__DA))) {
+                        ssi_transfer(s->spi, 0);
+                    }
+                    do {
+                        uint32_t data_size = MIN(sizeof(buf), write_bytes);
+                        dma_memory_read(&address_space_memory, phys_addr, buf, data_size);
+qemu_log("%s: write %02x %02x %02x %02x\n", TYPE_QUATRO_SPI, buf[0], buf[1], buf[2], buf[3]);
+                        for (uint32_t i = 0; i < data_size; ++i) {
+                            ssi_transfer(s->spi, buf[i]);
+                        }
+                        write_bytes -= data_size;
+                        phys_addr += data_size;
+                    } while (write_bytes > 0);
+                    if (value & (1 << SPICMD__DA)) {
+                        ssi_transfer(s->spi, 0);
+                    }
+
+                    if (read_bytes > 0) {
+                        phys_addr = (s->regs[SPIDCTL] & (1 << SPIDCTL__RB)) ? s->regs[SPIRADDR] : s->regs[SPIDADDR];
+                        fifo8_reset(&s->rx_fifo);
+                        do {
+                            uint32_t data_size = read_bytes;
+                            while (!fifo8_is_full(&s->rx_fifo) && (read_bytes > 0)) {
+                                uint32_t rx = ssi_transfer(s->spi, 0);
+                                fifo8_push(&s->rx_fifo, (uint8_t)rx);
+                                --read_bytes;
+                            }
+                            if (data_size > fifo8_num_used(&s->rx_fifo)) {
+                                data_size = fifo8_num_used(&s->rx_fifo);
+                            }
+                            const uint8_t *read_buf = fifo8_pop_buf(&s->rx_fifo, data_size, &data_size);
+                            dma_memory_write(&address_space_memory, phys_addr, read_buf, data_size);
+                            phys_addr += data_size;
+                        } while (read_bytes > 0);
+                    }
+                }
             }
+            qemu_set_irq(s->cs_line, 1);
 
             s->regs[SPIINT] |= 0x2;
             qemu_irq_raise(s->irq);
@@ -504,7 +565,7 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
         }
         break;
     default:
-        qemu_log("%s: Bad write offset 0x%" HWADDR_PRIx "\n",
+        qemu_log("%s: Bad write offset %#" HWADDR_PRIx "\n",
                  TYPE_QUATRO_SPI, offset);
         return;
     }
