@@ -34,7 +34,7 @@
 #include "qemu/log.h"
 
 
-#define LS1_CCSR_DEBUG
+//#define LS1_CCSR_DEBUG
 
 
 #define DDR_MMIO_SIZE (0x10000)
@@ -669,6 +669,8 @@ static uint64_t ccsr_scfg_read(void *opaque, hwaddr addr,
     return value;
 }
 
+static uint32_t holdoff_cpus = 0x00000000;
+
 static void ccsr_scfg_write(void *opaque, hwaddr addr,
                                uint64_t value, unsigned size)
 {
@@ -752,6 +754,17 @@ static void ccsr_scfg_write(void *opaque, hwaddr addr,
         break;
     case SCFG_ADDR_COREBCR:
         s->corebcr = SCFG_MSK_COREBCR(value);
+        {
+            ARMCPU *cpu = ARM_CPU(current_cpu);
+            CPUARMState *env = &cpu->env;
+            int cur_el = arm_current_el(&cpu->env);
+
+            for (int i = 0; i < smp_cpus; ++i) {
+                if (holdoff_cpus & value & (1 << i)) {
+                    arm_set_cpu_on(i, bootlocptr, env->xregs[0], cur_el, env->aarch64);
+                }
+            }
+        }
         break;
     default:
         hw_error("%s: Unknown register write: " REG_FMT " < %" PRIx64 "\n",
@@ -884,19 +897,10 @@ static uint64_t ccsr_guts_read(void *opaque, hwaddr addr,
 static void ccsr_guts_write(void *opaque, hwaddr addr,
                                uint64_t value, unsigned size)
 {
-    ARMCPU *cpu = ARM_CPU(current_cpu);
-    CPUARMState *env = &cpu->env;
-    int cur_el = arm_current_el(&cpu->env);
-    int i;
-
     addr &= GUTS_MMIO_SIZE - 1;
     switch (addr) {
     case GUTS_ADDR_BRR:
-        for (i = 0; i < smp_cpus; ++i) {
-            if (value & (1 << i)) {
-                arm_set_cpu_on(i, bootlocptr, env->xregs[0], cur_el, env->aarch64);
-            }
-        }
+        holdoff_cpus = (uint32_t)value;
         break;
     default:
         hw_error("%s: Unknown register write: "REG_FMT " < %" PRIx64 "\n",

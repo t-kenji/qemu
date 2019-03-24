@@ -1,7 +1,7 @@
 /*
  * QorIQ LS1046A Serial Presence Detect EEPROM for DDR
  *
- * Copyright (C) 2017 t-kenji <protect.2501@gmail.com>
+ * Copyright (C) 2017-2019 t-kenji <protect.2501@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,9 +21,10 @@
 #include "hw/misc/ls1_spd.h"
 #include "qemu/log.h"
 
+//#define ENABLE_DEBUG
 
-#define LS1_SPD_DEBUG
-
+#define TYPE_LS1_DDR4SPD "ls1.ddr4spd"
+#define LS1_DDR4SPD(obj) OBJECT_CHECK(DDR4SPDState, (obj), TYPE_LS1_DDR4SPD)
 
 #define SPD_EEPROM_NUM  (1)
 
@@ -31,19 +32,21 @@
 #define SPD_SPA1_ADDR   (0x37)
 #define SPD_EEPROM_ADDR (0x51)
 
-
-#if defined(LS1_SPD_DEBUG)
-#define dprintf(...) qemu_log(__VA_ARGS__)
+#if defined(ENABLE_DEBUG)
+#define DEBUG(type, format, ...) qemu_log("%s: " format "\n", TYPE_LS1_##type, ##__VA_ARGS__)
 #else
-#define dprintf(...)
+#define DEBUG(type, format, ...)
 #endif
 
-struct DDR4SPDDevice {
-    SMBusDevice smbusdev;
+typedef struct {
+    /*< private >*/
+    SMBusDevice parent_obj;
+
+    /*< public >*/
     void *data;
     void *alias;
     uint8_t offset;
-};
+} DDR4SPDState;
 
 /* From JEEC Standard No. 21-C release 23A */
 struct ddr4_spd_eeprom_s {
@@ -295,8 +298,8 @@ static struct ddr4_spd_eeprom_s spd_eeprom[SPD_EEPROM_NUM] = {
         .trrdl_min = 0x28,          /* #39 DDR4-2400, 1/2 KB page size */
         .tccdl_min = 0x28,          /* #40 DDR4-2400 */
         .mapping = {                /* #60-77  */
-            0x0c, 0x2c, 0x15, 0x35, 0x15, 0x35, 0x0b, 0x2c, 0x15,
-            0x35, 0x0b, 0x35, 0x0b, 0x2c, 0x0b, 0x35, 0x15, 0x36
+            0x0C, 0x2C, 0x15, 0x35, 0x15, 0x35, 0x0B, 0x2C, 0x15,
+            0x35, 0x0B, 0x35, 0x0B, 0x2C, 0x0B, 0x35, 0x15, 0x36
         },
         .fine_tccdl_min = 0x00,     /* #117  */
         .fine_trrdl_min = 0x9C,     /* #118  */
@@ -321,18 +324,19 @@ static struct ddr4_spd_eeprom_s spd_eeprom[SPD_EEPROM_NUM] = {
 
 static uint16_t spd_crc16(uint8_t *ptr, int count)
 {
-    int crc, i;
-
-    crc = 0;
+    int crc = 0;
     while (--count >= 0) {
         crc = crc ^ (int)*ptr++ << 8;
-        for (i = 0; i < 8; ++i)
-            if (crc & 0x8000)
+        for (int i = 0; i < 8; ++i) {
+            if (crc & 0x8000) {
                 crc = crc << 1 ^ 0x1021;
-            else
+            } else {
                 crc = crc << 1;
+            }
+        }
     }
-    return (uint16_t)(crc & 0xffff);
+
+    return (uint16_t)(crc & 0xFFFF);
 }
 
 static void byte_copy(uint8_t *dest, const uint8_t *src, size_t n)
@@ -345,41 +349,44 @@ static void byte_copy(uint8_t *dest, const uint8_t *src, size_t n)
 
 static void spd_quick_cmd(SMBusDevice *dev, uint8_t read)
 {
-    dprintf("%s: addr=0x%02x read=%d\n", __func__, dev->i2c.address, read);
+    DEBUG(DDR4SPD, "Quick command addr=%#02x read=%d", dev->i2c.address, read);
 }
 
 static void spd_send_byte(SMBusDevice *dev, uint8_t val)
 {
-    struct DDR4SPDDevice *spd = (struct DDR4SPDDevice *)dev;
+    DDR4SPDState *s = LS1_DDR4SPD(dev);
 
-    dprintf("%s: addr=0x%02x val=0x%02x\n", __func__, dev->i2c.address, val);
-    spd->offset = val;
+    DEBUG(DDR4SPD, "Send byte addr=%#02x val=%#02x", dev->i2c.address, val);
+
+    s->offset = val;
 }
 
 static uint8_t spd_receive_byte(SMBusDevice *dev)
 {
-    struct DDR4SPDDevice *spd = (struct DDR4SPDDevice *)dev;
-    uint8_t *data = spd->data;
-    uint8_t val = data[spd->offset++];
+    DDR4SPDState *s = LS1_DDR4SPD(dev);
+    uint8_t *data = s->data;
+    uint8_t val = data[s->offset++];
 
-    dprintf("%s: addr=0x%02x:%u val=0x%02x\n",
-           __func__, dev->i2c.address, spd->offset - 1, val);
+    DEBUG(DDR4SPD, "Receive byte addr=%#02x:%u val=%#02x",
+          dev->i2c.address, s->offset - 1, val);
+
     return val;
 }
 
 static void spd_write_data(SMBusDevice *dev, uint8_t cmd, uint8_t *buf, int len)
 {
-    struct DDR4SPDDevice *spd = (struct DDR4SPDDevice *)dev;
+    DDR4SPDState *s = LS1_DDR4SPD(dev);
     int n;
 
-    dprintf("%s: addr=0x%02x cmd=0x%02x val=0x%02x len=%d\n",
-           __func__, dev->i2c.address, cmd, buf[0], len);
+    DEBUG(DDR4SPD, "Write data addr=%#02x cmd=%#02x val=%#02x len=%d",
+           dev->i2c.address, cmd, buf[0], len);
+
     switch (dev->i2c.address) {
     case SPD_SPA0_ADDR:
-        *(uintptr_t**)spd->alias = spd->data;
+        *(uintptr_t**)s->alias = s->data;
         break;
     case SPD_SPA1_ADDR:
-        *(uintptr_t**)spd->alias = spd->data;
+        *(uintptr_t**)s->alias = s->data;
         break;
     default:
         /* A page write operation is not a valid SMBus command.
@@ -391,10 +398,10 @@ static void spd_write_data(SMBusDevice *dev, uint8_t cmd, uint8_t *buf, int len)
         } else {
             n = len;
         }
-        byte_copy(spd->data + cmd, buf, n);
+        byte_copy(s->data + cmd, buf, n);
         len -= n;
         if (len) {
-            byte_copy(spd->data, buf + n, len);
+            byte_copy(s->data, buf + n, len);
         }
         break;
     }
@@ -402,10 +409,13 @@ static void spd_write_data(SMBusDevice *dev, uint8_t cmd, uint8_t *buf, int len)
 
 static uint8_t spd_read_data(SMBusDevice *dev, uint8_t cmd, int n)
 {
-    struct DDR4SPDDevice *spd = (struct DDR4SPDDevice *)dev;
+    DDR4SPDState *s = LS1_DDR4SPD(dev);
+
     /* If this is the first byte then set the current position.  */
-    if (n == 0)
-        spd->offset = cmd;
+    if (n == 0) {
+        s->offset = cmd;
+    }
+
     /* As with writes, we implement block reads without the
        SMBus length byte.  */
     return spd_receive_byte(dev);
@@ -413,14 +423,14 @@ static uint8_t spd_read_data(SMBusDevice *dev, uint8_t cmd, int n)
 
 static void spd_realize(DeviceState *dev, Error **errp)
 {
-    struct DDR4SPDDevice *spd = (struct DDR4SPDDevice *)dev;
+    DDR4SPDState *s = LS1_DDR4SPD(dev);
 
-    spd->offset = 0;
+    s->offset = 0;
 }
 
 static Property spd_properties[] = {
-    DEFINE_PROP_PTR("data", struct DDR4SPDDevice, data),
-    DEFINE_PROP_PTR("alias", struct DDR4SPDDevice, alias),
+    DEFINE_PROP_PTR("data", DDR4SPDState, data),
+    DEFINE_PROP_PTR("alias", DDR4SPDState, alias),
     DEFINE_PROP_END_OF_LIST(),
 };
 
@@ -443,9 +453,9 @@ static void spd_class_initfn(ObjectClass *klass, void *data)
 static void spd_register_types(void)
 {
     static const TypeInfo spd_info = {
-        .name          = "ls1-spd",
+        .name          = TYPE_LS1_DDR4SPD,
         .parent        = TYPE_SMBUS_DEVICE,
-        .instance_size = sizeof(struct DDR4SPDDevice),
+        .instance_size = sizeof(DDR4SPDState),
         .class_init    = spd_class_initfn,
     };
 
@@ -479,20 +489,20 @@ void ls1_spd_init(I2CBus *smbus)
 
         /* setup device */
         DeviceState *spd, *alias;
-        spd = qdev_create((BusState *)smbus, "ls1-spd");
+        spd = qdev_create((BusState *)smbus, TYPE_LS1_DDR4SPD);
         qdev_prop_set_uint8(spd, "address", slave_addrs[i].address);
         qdev_prop_set_ptr(spd, "data", NULL);
         qdev_prop_set_ptr(spd, "alias", NULL);
         qdev_init_nofail(spd);
-        alias = qdev_create((BusState *)smbus, "ls1-spd");
+        alias = qdev_create((BusState *)smbus, TYPE_LS1_DDR4SPD);
         qdev_prop_set_uint8(alias, "address", slave_addrs[i].lower_alias);
         qdev_prop_set_ptr(alias, "data", (uint8_t *)((uintptr_t)&spd_eeprom[i] + 0));
-        qdev_prop_set_ptr(alias, "alias", &((struct DDR4SPDDevice *)spd)->data);
+        qdev_prop_set_ptr(alias, "alias", &LS1_DDR4SPD(spd)->data);
         qdev_init_nofail(alias);
-        alias = qdev_create((BusState *)smbus, "ls1-spd");
+        alias = qdev_create((BusState *)smbus, TYPE_LS1_DDR4SPD);
         qdev_prop_set_uint8(alias, "address", slave_addrs[i].upper_alias);
         qdev_prop_set_ptr(alias, "data", (uint8_t *)((uintptr_t)&spd_eeprom[i] + 256));
-        qdev_prop_set_ptr(alias, "alias", &((struct DDR4SPDDevice *)spd)->data);
+        qdev_prop_set_ptr(alias, "alias", &LS1_DDR4SPD(spd)->data);
         qdev_init_nofail(alias);
     }
 }

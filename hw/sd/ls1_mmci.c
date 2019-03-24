@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 t-kenji <protect.2501@gmail.com>
+ * Copyright (c) 2017-2019 t-kenji <protect.2501@gmail.com>
  *
  * LS1046A MultiMediaCard/SD/SDIO Controller emulation.
  *
@@ -28,9 +28,7 @@
 #include "hw/sd/ls1_mmci.h"
 #include "qemu/log.h"
 
-
-#define LS1_MMCI_DEBUG
-
+//#define ENABLE_DEBUG
 
 #define TYPE_LS1_MMCI_BUS "ls1-mmci-bus"
 #define LS1_MMCI_BUS(obj) OBJECT_CHECK(SDBus, (obj), TYPE_LS1_MMCI_BUS)
@@ -179,12 +177,16 @@
 #define BIT_PROCTL_CREQ (17)
 #define BIT_PROCTL_SABGREG (16)
 #define BIT_PROCTL_DMAS (8)
+#define BIT_PROCTL_EMODE (4)
 #define PICK_PROCTL_CREQ(v) (((v) >> BIT_PROCTL_CREQ) & 0x01)
 #define PICK_PROCTL_SABGREG(v) (((v) >> BIT_PROCTL_SABGREG) & 0x01)
 #define PICK_PROCTL_DMAS(v) (((v) >> BIT_PROCTL_DMAS) & 0x03)
+#define PICK_PROCTL_EMODE(v) (((v) >> BIT_PROCTL_EMODE) & 0x03)
 #define VAL_PROCTL_DMAS_SDMA (0)
 #define VAL_PROCTL_DMAS_ADMA1 (1)
 #define VAL_PROCTL_DMAS_ADMA2_32 (2)
+#define VAL_PROCTL_EMODE_BE (0)
+#define VAL_PROCTL_EMODE_LE (2)
 
 /*
  * System Control Register when ESDHCCTL[CRS=0] (SYSCTL_ESDHCCTL_CRS_0)
@@ -470,10 +472,10 @@
 
 #define REG_FMT TARGET_FMT_plx
 
-#if defined(LS1_MMCI_DEBUG)
-#define dprintf(...) qemu_log(__VA_ARGS__)
+#if defined(ENABLE_DEBUG)
+#define DEBUG(type, format, ...) qemu_log("%s: " format "\n", TYPE_LS1_##type, ##__VA_ARGS__)
 #else
-#define dprintf(...)
+#define DEBUG(type, format, ...)
 #endif
 
 
@@ -637,7 +639,7 @@ static void ls1_mmci_end_transfer(LS1MMCIState *s)
 
         req.cmd = 0x0C;
         req.arg = 0;
-        dprintf("%s:%d$ Automatically issue CMD%d %08x\n", __func__, __LINE__, req.cmd, req.arg);
+        DEBUG(MMCI, "Automatically issue CMD%d %08x", req.cmd, req.arg);
         sdbus_do_command(&s->sdbus, &req, rsp);
         /* Auto CMD12 respose goes to the upper Response register */
         s->cmdrsp[0] = (rsp[0] << 24) | (rsp[1] << 16) | (rsp[2] << 8) | rsp[3];
@@ -784,8 +786,8 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
         s->admaes &= ~(1 << BIT_ADMAES_ADMALME);
 
         ls1_mmci_adma_description(s, &desc);
-        dprintf("ADMA loop: addr=" REG_FMT ", len=%d, attr=%x\n",
-                desc.addr, desc.length, desc.attr);
+        DEBUG(MMCI, "ADMA loop: addr=" REG_FMT ", len=%d, attr=%x",
+              desc.addr, desc.length, desc.attr);
 
         if ((desc.attr & SDHC_ADMA_ATTR_VALID) == 0) {
             s->admaes &= ~MSK_ADMAES_ADMAES;
@@ -847,7 +849,7 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
             break;
         case SDHC_ADMA_ATTR_ACT_LINK:
             s->adsaddr = desc.addr;
-            dprintf("ADMA link: adsaddr=0x%08x\n", s->adsaddr);
+            DEBUG(MMCI, "ADMA link: adsaddr=%#" PRIx32, s->adsaddr);
             break;
         default:
             s->adsaddr += desc.incr;
@@ -855,7 +857,7 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
         }
 
         if (desc.attr & SDHC_ADMA_ATTR_INT) {
-            dprintf("ADMA interrupt: adsaddr=0x%08x\n", s->adsaddr);
+            DEBUG(MMCI, "ADMA interrupt: adsaddr=%#" PRIx32, s->adsaddr);
             if (PICK_IRQSTATEN_DINT(s->irqstaten)) {
                 s->irqstat |= (1 << BIT_IRQSTAT_DINT);
             }
@@ -868,15 +870,15 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
              && (PICK_BLKATTR_BLKCNT(s->blkattr) == 0))
             || (desc.attr & SDHC_ADMA_ATTR_END)) {
 
-            dprintf("ADMA transfer completed\n");
+            DEBUG(MMCI, "ADMA transfer completed");
             if ((length != 0) || ((desc.attr & SDHC_ADMA_ATTR_END) &&
                                   PICK_XFERTYP_BCEN(s->xfertyp) &&
                                   (PICK_BLKATTR_BLKCNT(s->blkattr) != 0))) {
 
-                dprintf("SD/MMC host ADMA length mismatch\n");
+                DEBUG(MMCI, "SD/MMC host ADMA length mismatch");
                 //s->admaes |= (1 << BIT_ADMAES_ADMALME) | VAL_ADMAES_ADMAES_DATA_XFER;
                 if (PICK_IRQSTATEN_ADMAE(s->irqstaten)) {
-                    dprintf("Set ADMA error flag\n");
+                    DEBUG(MMCI, "Set ADMA error flag");
                     //s->irqstat |= (1 << BIT_IRQSTAT_ADMAE);
                 }
 
@@ -895,7 +897,7 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
 static void ls1_mmci_read_block_from_card(LS1MMCIState *s)
 {
     if (!sdbus_data_ready(&s->sdbus)) {
-        dprintf("%s: data not ready", __func__);
+        DEBUG(MMCI, "Data not ready");
         return;
     }
 
@@ -1143,17 +1145,20 @@ static uint64_t ls1_mmci_read(void *opaque, hwaddr offset, unsigned size)
         //hw_error("%s: Bad offset " REG_FMT "\n", __func__, offset);
         break;
     }
-    dprintf("%s: %s > %" PRIx64 "\n", __func__, get_reg_name(offset), value);
+    DEBUG(MMCI, "Read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
+          value, get_reg_name(offset), offset);
 
     return value;
 }
 
 static void ls1_mmci_write(void *opaque,
-                           hwaddr offset, uint64_t value, unsigned size)
+                           hwaddr offset,
+                           uint64_t value,
+                           unsigned size)
 {
     LS1MMCIState *s = opaque;
 
-    dprintf("%s: %s < %" PRIx64 "\n", __func__, get_reg_name(offset), value);
+
     switch (offset) {
     case REG_DSADDR_BLKATTR2:
         s->ds_addr = value & MSK_DSADDR_BLKATTR2;
@@ -1214,6 +1219,14 @@ static void ls1_mmci_write(void *opaque,
         ls1_mmci_int_update(s);
         break;
     case REG_IRQSTATEN:
+        /* Workaround for write little endian for 1st time. */
+        {
+            static bool first = true;
+            if (first) {
+                value = bswap32((uint32_t)value);
+                first = false;
+            }
+        }
         s->irqstaten = value & MSK_IRQSTATEN;
         break;
     case REG_IRQSIGEN:
@@ -1236,6 +1249,8 @@ static void ls1_mmci_write(void *opaque,
                  __func__, offset, value);
         break;
     }
+    DEBUG(MMCI, "Write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+          value, get_reg_name(offset), offset);
 }
 
 static const MemoryRegionOps ls1_mmci_ops = {

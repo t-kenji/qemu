@@ -67,19 +67,19 @@ static void fsl_ls1046a_init(Object *obj)
     qdev_set_parent_bus(DEVICE(&s->scfg), sysbus_get_default());
     object_property_add_child(obj, "scfg", OBJECT(&s->scfg), NULL);
 
-    object_initialize(&s->sec, sizeof(s->sec), TYPE_DPAA_SEC);
+    object_initialize(&s->sec, sizeof(s->sec), TYPE_LS1_DPAA_SEC);
     qdev_set_parent_bus(DEVICE(&s->sec), sysbus_get_default());
     object_property_add_child(obj, "sec", OBJECT(&s->sec), NULL);
 
-    object_initialize(&s->qman, sizeof(s->qman), TYPE_DPAA_QMAN);
+    object_initialize(&s->qman, sizeof(s->qman), TYPE_LS1_DPAA_QMAN);
     qdev_set_parent_bus(DEVICE(&s->qman), sysbus_get_default());
     object_property_add_child(obj, "qman", OBJECT(&s->qman), NULL);
 
-    object_initialize(&s->bman, sizeof(s->bman), TYPE_DPAA_BMAN);
+    object_initialize(&s->bman, sizeof(s->bman), TYPE_LS1_DPAA_BMAN);
     qdev_set_parent_bus(DEVICE(&s->bman), sysbus_get_default());
     object_property_add_child(obj, "bman", OBJECT(&s->bman), NULL);
 
-    object_initialize(&s->fman, sizeof(s->fman), TYPE_DPAA_FMAN);
+    object_initialize(&s->fman, sizeof(s->fman), TYPE_LS1_DPAA_FMAN);
     qdev_set_parent_bus(DEVICE(&s->fman), sysbus_get_default());
     object_property_add_child(obj, "fman", OBJECT(&s->fman), NULL);
 
@@ -104,11 +104,11 @@ static void fsl_ls1046a_init(Object *obj)
     object_property_add_alias(obj, "sd-bus", OBJECT(&s->esdhc),
                               "sd-bus", NULL);
 
-    object_initialize(&s->qmsp, sizeof(s->qmsp), TYPE_DPAA_QMSP);
+    object_initialize(&s->qmsp, sizeof(s->qmsp), TYPE_LS1_DPAA_QMSP);
     qdev_set_parent_bus(DEVICE(&s->qmsp), sysbus_get_default());
     object_property_add_child(obj, "qmsp", OBJECT(&s->qmsp), NULL);
 
-    object_initialize(&s->bmsp, sizeof(s->bmsp), TYPE_DPAA_BMSP);
+    object_initialize(&s->bmsp, sizeof(s->bmsp), TYPE_LS1_DPAA_BMSP);
     qdev_set_parent_bus(DEVICE(&s->bmsp), sysbus_get_default());
     object_property_add_child(obj, "bmsp", OBJECT(&s->bmsp), NULL);
 }
@@ -351,6 +351,9 @@ static void fsl_ls1046a_realize(DeviceState *dev, Error **errp)
     }
     memory_region_add_subregion(get_system_memory(), FSL_LS1046A_OCRAM1_ADDR,
                                 &s->ocram1);
+
+    sysbus_create_simple("ls1.dcsr", FSL_LS1046A_DCSR_ADDR, NULL);
+    sysbus_create_simple("ls1.ifc", FSL_LS1046A_IFC_ADDR, NULL);
 
     object_property_set_bool(OBJECT(&s->qmsp), true, "realized", &err);
     if (err) {

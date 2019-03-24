@@ -226,6 +226,8 @@ static void ls1046ardb_init(MachineState *machine)
     memory_region_add_subregion(address_space_mem, FSL_LS1046A_MMDC_ADDR,
                                 &vms->ram);
 
+    sysbus_create_simple("ls1.cpld", FSL_LS1046A_CPLD_ADDR, NULL);
+
     /* Initialize EEPROMs */
     smbus = (I2CBus *)qdev_get_child_bus(DEVICE(&vms->soc.i2cs[0]), "i2c-bus.0");
     ls1_spd_init(smbus);

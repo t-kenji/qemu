@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2017 t-kenji <protect.2501@gmail.com>
  *
- * QorIQ LS1046A Data Path Acceleration Architecture  pseudo-device
+ * QorIQ LS1046A Data Path Acceleration Architecture pseudo-device
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the
@@ -35,8 +35,7 @@
 #include "hw/misc/ls1_dpaa.h"
 #include "qemu/log.h"
 
-
-#define LS1_DPAA_DEBUG
+//#define ENABLE_DEBUG
 
 #define QMSP_MMIO_SIZE (0x8000000)
 #define BMSP_MMIO_SIZE (0x8000000)
@@ -88,10 +87,10 @@
 
 #define REG_FMT TARGET_FMT_plx
 
-#if defined(LS1_DPAA_DEBUG)
-#define dprintf(...) qemu_log(__VA_ARGS__)
+#if defined(ENABLE_DEBUG)
+#define DEBUG(type, format, ...) qemu_log("%s: " format "\n", TYPE_LS1_DPAA_##type, ##__VA_ARGS__)
 #else
-#define dprintf(...)
+#define DEBUG(type, format, ...)
 #endif
 
 
@@ -124,7 +123,7 @@ static uint64_t dpaa_qmsp_read(void *opaque, hwaddr addr, unsigned size)
     default:
         break;
     }
-    dprintf("%s: " REG_FMT "+%d+%d > %"  PRIx64 "\n", __func__, addr, offset, i, value);
+    DEBUG(QMSP, "Read %#" PRIx64 " from %#" HWADDR_PRIx "+%d+%d", value, addr, offset, i);
 
     return value;
 }
@@ -158,7 +157,7 @@ static void dpaa_qmsp_write(void *opaque, hwaddr addr,
     default:
         break;
     }
-    dprintf("%s: " REG_FMT "+%d+%d < %" PRIx64 "\n", __func__, addr, offset, i, value);
+    DEBUG(QMSP, "Write %#" PRIx64 " to %#" HWADDR_PRIx "+%d+%d", value, addr, offset, i);
 }
 
 static uint64_t dpaa_bmsp_read(void *opaque, hwaddr addr, unsigned size)
@@ -167,7 +166,7 @@ static uint64_t dpaa_bmsp_read(void *opaque, hwaddr addr, unsigned size)
 
     addr &= BMSP_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " > %"  PRIx64 "\n", __func__, addr, value);
+    DEBUG(BMSP, "Read %#" PRIx64 " from %#" HWADDR_PRIx, value, addr);
 
     return value;
 }
@@ -177,7 +176,7 @@ static void dpaa_bmsp_write(void *opaque, hwaddr addr,
 {
     addr &= BMSP_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " < %" PRIx64 "\n", __func__, addr, value);
+    DEBUG(BMSP, "Write %#" PRIx64 " to %#" HWADDR_PRIx, value, addr);
 }
 
 static uint64_t dpaa_sec_read(void *opaque, hwaddr addr, unsigned size)
@@ -186,7 +185,7 @@ static uint64_t dpaa_sec_read(void *opaque, hwaddr addr, unsigned size)
 
     addr &= SEC_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " > %"  PRIx64 "\n", __func__, addr, value);
+    DEBUG(SEC, "Read %#" PRIx64 " from %#" HWADDR_PRIx, value, addr);
 
     return value;
 }
@@ -196,7 +195,7 @@ static void dpaa_sec_write(void *opaque, hwaddr addr,
 {
     addr &= SEC_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " < %" PRIx64 "\n", __func__, addr, value);
+    DEBUG(SEC, "Write %#" PRIx64 " to %#" HWADDR_PRIx, value, addr);
 }
 
 static uint64_t dpaa_qman_read(void *opaque, hwaddr addr, unsigned size)
@@ -205,7 +204,7 @@ static uint64_t dpaa_qman_read(void *opaque, hwaddr addr, unsigned size)
 
     addr &= QMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " > %"  PRIx64 "\n", __func__, addr, value);
+    DEBUG(QMAN, "Read  %#" PRIx64 " from %#" HWADDR_PRIx, value, addr);
 
     return value;
 }
@@ -215,7 +214,7 @@ static void dpaa_qman_write(void *opaque, hwaddr addr,
 {
     addr &= QMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " < %" PRIx64 "\n", __func__, addr, value);
+    DEBUG(QMAN, "Write %#" PRIx64 " to %#" HWADDR_PRIx, value, addr);
 }
 
 static uint64_t dpaa_bman_read(void *opaque, hwaddr addr, unsigned size)
@@ -224,7 +223,7 @@ static uint64_t dpaa_bman_read(void *opaque, hwaddr addr, unsigned size)
 
     addr &= BMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " > %"  PRIx64 "\n", __func__, addr, value);
+    DEBUG(BMAN, "Read %#" PRIx64 " from %#" HWADDR_PRIx, value, addr);
 
     return value;
 }
@@ -234,7 +233,7 @@ static void dpaa_bman_write(void *opaque, hwaddr addr,
 {
     addr &= BMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " < %" PRIx64 "\n", __func__, addr, value);
+    DEBUG(BMAN, "Write %#" PRIx64 " to %#" HWADDR_PRIx, value, addr);
 }
 
 static uint64_t dpaa_fman_read(void *opaque, hwaddr addr, unsigned size)
@@ -243,7 +242,7 @@ static uint64_t dpaa_fman_read(void *opaque, hwaddr addr, unsigned size)
 
     addr &= FMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " > %"  PRIx64 "\n", __func__, addr, value);
+    DEBUG(FMAN, "Read %#" PRIx64 " from %#" HWADDR_PRIx, value, addr);
 
     return value;
 }
@@ -253,7 +252,7 @@ static void dpaa_fman_write(void *opaque, hwaddr addr,
 {
     addr &= FMAN_MMIO_SIZE - 1;
 
-    dprintf("%s: " REG_FMT " < %" PRIx64 "\n", __func__, addr, value);
+    DEBUG(FMAN, "Write %#" PRIx64 " to %#" HWADDR_PRIx, value, addr);
 }
 
 static void dpaa_qmsp_initfn(Object *obj)
@@ -269,11 +268,11 @@ static void dpaa_qmsp_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAAQMSPState *s = DPAA_QMSP(obj);
+    DPAAQMSPState *s = LS1_DPAA_QMSP(obj);
     int i, j;
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_qmsp_ops, s,
-                          "dpaa.qmsp", QMSP_MMIO_SIZE);
+                          TYPE_LS1_DPAA_QMSP, QMSP_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 
     for (i = 0; i < ARRAY_SIZE(s->qcsp_eqcr_ci_cinh); ++i) {
@@ -312,10 +311,10 @@ static void dpaa_bmsp_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAABMSPState *s = DPAA_BMSP(obj);
+    DPAABMSPState *s = LS1_DPAA_BMSP(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_bmsp_ops, s,
-                          "dpaa.bmsp", BMSP_MMIO_SIZE);
+                          TYPE_LS1_DPAA_BMSP, BMSP_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 }
 
@@ -332,10 +331,10 @@ static void dpaa_sec_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAASecState *s = DPAA_SEC(obj);
+    DPAASecState *s = LS1_DPAA_SEC(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_sec_ops, s,
-                          "dpaa.sec", SEC_MMIO_SIZE);
+                          TYPE_LS1_DPAA_SEC, SEC_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 }
 
@@ -352,10 +351,10 @@ static void dpaa_qman_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAAQManState *s = DPAA_QMAN(obj);
+    DPAAQManState *s = LS1_DPAA_QMAN(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_qman_ops, s,
-                          "dpaa.qman", QMAN_MMIO_SIZE);
+                          TYPE_LS1_DPAA_QMAN, QMAN_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 }
 
@@ -372,10 +371,10 @@ static void dpaa_bman_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAABManState *s = DPAA_BMAN(obj);
+    DPAABManState *s = LS1_DPAA_BMAN(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_bman_ops, s,
-                          "dpaa.bman", BMAN_MMIO_SIZE);
+                          TYPE_LS1_DPAA_BMAN, BMAN_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 }
 
@@ -392,51 +391,51 @@ static void dpaa_fman_initfn(Object *obj)
     };
 
     SysBusDevice *d = SYS_BUS_DEVICE(obj);
-    DPAAFManState *s = DPAA_FMAN(obj);
+    DPAAFManState *s = LS1_DPAA_FMAN(obj);
 
     memory_region_init_io(&s->iomem, OBJECT(s), &dpaa_fman_ops, s,
-                          "dpaa.fman", FMAN_MMIO_SIZE);
+                          TYPE_LS1_DPAA_FMAN, FMAN_MMIO_SIZE);
     sysbus_init_mmio(d, &s->iomem);
 }
 
 
 static const TypeInfo dpaa_qmsp_info = {
-    .name          = TYPE_DPAA_QMSP,
+    .name          = TYPE_LS1_DPAA_QMSP,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAAQMSPState),
     .instance_init = dpaa_qmsp_initfn
 };
 
 static const TypeInfo dpaa_bmsp_info = {
-    .name          = TYPE_DPAA_BMSP,
+    .name          = TYPE_LS1_DPAA_BMSP,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAABMSPState),
     .instance_init = dpaa_bmsp_initfn
 };
 
 static const TypeInfo dpaa_sec_info = {
-    .name          = TYPE_DPAA_SEC,
+    .name          = TYPE_LS1_DPAA_SEC,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAASecState),
     .instance_init = dpaa_sec_initfn
 };
 
 static const TypeInfo dpaa_qman_info = {
-    .name          = TYPE_DPAA_QMAN,
+    .name          = TYPE_LS1_DPAA_QMAN,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAAQManState),
     .instance_init = dpaa_qman_initfn
 };
 
 static const TypeInfo dpaa_bman_info = {
-    .name          = TYPE_DPAA_BMAN,
+    .name          = TYPE_LS1_DPAA_BMAN,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAABManState),
     .instance_init = dpaa_bman_initfn
 };
 
 static const TypeInfo dpaa_fman_info = {
-    .name          = TYPE_DPAA_FMAN,
+    .name          = TYPE_LS1_DPAA_FMAN,
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(DPAAFManState),
     .instance_init = dpaa_fman_initfn
