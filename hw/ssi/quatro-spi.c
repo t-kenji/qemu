@@ -460,8 +460,10 @@ static uint64_t quatro_spi_read(void *opaque, hwaddr offset, unsigned size)
         value = fifo8_pop(&s->rx_fifo);
         break;
     }
+#if 0
     qemu_log("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_QUATRO_SPI, value, quatro_spi_regs[index].name, offset);
+#endif
     return value;
 }
 
@@ -485,6 +487,7 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
         break;
     case SPICMD0:
         if (value & (1 << SPICMD__START)) {
+            /* TODO: Cut out as a function. */
             uint32_t write_bytes = ((((uint32_t)value >> 16) & 0x1FFF) + 1) >> 3;
             uint32_t read_bytes = (((uint32_t)value & 0x1FFF) + 1) >> 3;
 
@@ -498,6 +501,7 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
                         fifo8_push(&s->rx_fifo, rx);
                         --write_bytes;
                     } while (write_bytes > 0);
+                    fifo8_reset(&s->tx_fifo);
                 } else {
                     static uint8_t buf[FIFO_CAPACITY];
                     dma_addr_t phys_addr = s->regs[SPIDADDR];
@@ -510,7 +514,6 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
                     do {
                         uint32_t data_size = MIN(sizeof(buf), write_bytes);
                         dma_memory_read(&address_space_memory, phys_addr, buf, data_size);
-qemu_log("%s: write %02x %02x %02x %02x\n", TYPE_QUATRO_SPI, buf[0], buf[1], buf[2], buf[3]);
                         for (uint32_t i = 0; i < data_size; ++i) {
                             ssi_transfer(s->spi, buf[i]);
                         }
@@ -556,7 +559,9 @@ qemu_log("%s: write %02x %02x %02x %02x\n", TYPE_QUATRO_SPI, buf[0], buf[1], buf
         s->regs[index] = (uint32_t)value;
         break;
     case SPIDFIFO:
-        fifo8_push(&s->tx_fifo, (uint8_t)value);
+        for (int i = 0; i < sizeof(s->regs[0]); ++i) {
+            fifo8_push(&s->tx_fifo, (uint8_t)((value >>  (8 * i)) & 0xFF));
+        }
         break;
     case SPIINT:
         if (((value & (1 << 1)) != 0) && ((s->regs[SPIINT] & (1 << 1)) != 0)) {
@@ -569,8 +574,10 @@ qemu_log("%s: write %02x %02x %02x %02x\n", TYPE_QUATRO_SPI, buf[0], buf[1], buf
                  TYPE_QUATRO_SPI, offset);
         return;
     }
+#if 0
     qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
              TYPE_QUATRO_SPI, value, quatro_spi_regs[index].name, offset);
+#endif
 }
 
 static void quatro_spi_reset(DeviceState *dev)

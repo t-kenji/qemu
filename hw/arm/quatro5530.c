@@ -73,11 +73,11 @@ void quatro5530_fcspi_init(CsrQuatroState *s, hwaddr addr)
     DriveInfo *di = drive_get_next(IF_MTD);
     BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
     SSIBus *bus = (SSIBus *)qdev_get_child_bus(dev, "spi");
-    DeviceState *flashdev = ssi_create_slave_no_init(bus, "n25q512a");
-    qdev_prop_set_drive(flashdev, "drive", blk, &error_abort);
-    qdev_init_nofail(flashdev);
+    DeviceState *mtd_dev = ssi_create_slave_no_init(bus, "n25q512a");
+    qdev_prop_set_drive(mtd_dev, "drive", blk, &error_abort);
+    qdev_init_nofail(mtd_dev);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
-                       qdev_get_gpio_in_named(flashdev, SSI_GPIO_CS, 0));
+                       qdev_get_gpio_in_named(mtd_dev, SSI_GPIO_CS, 0));
 }
 
 void quatro5530_spi_init(CsrQuatroState *s, hwaddr addr)
@@ -93,11 +93,11 @@ void quatro5530_spi_init(CsrQuatroState *s, hwaddr addr)
     DriveInfo *di = drive_get_next(IF_MTD);
     BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
     SSIBus *bus = (SSIBus *)qdev_get_child_bus(dev, "spi");
-    DeviceState *flashdev = ssi_create_slave_no_init(bus, "at25fs010");
-    qdev_prop_set_drive(flashdev, "drive", blk, &error_abort);
-    qdev_init_nofail(flashdev);
+    DeviceState *mtd_dev = ssi_create_slave_no_init(bus, "at25256b");
+    qdev_prop_set_drive(mtd_dev, "drive", blk, &error_abort);
+    qdev_init_nofail(mtd_dev);
     sysbus_connect_irq(SYS_BUS_DEVICE(dev), 1,
-                       qdev_get_gpio_in_named(flashdev, SSI_GPIO_CS, 0));
+                       qdev_get_gpio_in_named(mtd_dev, SSI_GPIO_CS, 0));
 }
 
 void quatro5530_stmmac_init(CsrQuatroState *s)
