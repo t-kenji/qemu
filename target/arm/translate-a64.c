@@ -13936,7 +13936,6 @@ static void aarch64_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
         case DISAS_SEV:
             gen_a64_set_pc_im(dc->pc);
             gen_helper_sev(cpu_env);
-            tcg_gen_exit_tb(NULL, 0);
             break;
         case DISAS_YIELD:
             gen_a64_set_pc_im(dc->pc);

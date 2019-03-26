@@ -458,6 +458,7 @@ void HELPER(sev)(CPUARMState *env)
             qemu_cond_signal(cs->halt_cond);
         }
     }
+    cpu_loop_exit(cs0);
 }
 
 void HELPER(yield)(CPUARMState *env)
