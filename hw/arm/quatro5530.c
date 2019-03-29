@@ -182,8 +182,11 @@ static void quatro5530_init(MachineState *machine)
 
     quatro5530_sdhci_init(&ms->soc, CSR_QUATRO_NUM_SDHCIS);
     quatro5530_fcspi_init(&ms->soc, CSR_QUATRO_FCSPI_ADDR);
-    quatro5530_fcspi_init(&ms->soc, CSR_QUATRO_SPI_ADDR);
+    quatro5530_spi_init(&ms->soc, CSR_QUATRO_SPI_ADDR);
     quatro5530_stmmac_init(&ms->soc);
+
+    sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM30_ADDR, NULL);
+    sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM31_ADDR, NULL);
 
     memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",
                                          machine->ram_size);
