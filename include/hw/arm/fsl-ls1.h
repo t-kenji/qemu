@@ -45,6 +45,7 @@ typedef struct FslLS1046AState {
     ARMCPU        cpus[FSL_LS1046A_NUM_CPUS];
     GICState      gic;
     qemu_irq      irqs[FSL_LS1046A_NUM_IRQ];
+    bool          secure;
     CCSRDDRState  ddr;
     CCSRSCfgState scfg;
     CCSRGUtsState guts;

@@ -44,11 +44,6 @@ struct __attribute__ ((packed)) ls1046ardb_eeprom {
     uint32_t crc;                   /* 0xfc - 0xff CRC32 checksum */
 };
 
-struct LS1046ARDB {
-    FslLS1046AState soc;
-    MemoryRegion ram;
-};
-
 /*
  * EEPROM CAT24C05 emulation.
  *  CAT24C05 - 4 kbit (512 x 8)
@@ -172,6 +167,19 @@ static void ls1046ardb_eeprom_init(I2CBus *smbus, int start_addr,
     }
 }
 
+#define TYPE_LS1046ARDB_MACHINE MACHINE_TYPE_NAME("ls1046ardb")
+#define LS1046ARDB_MACHINE(obj) OBJECT_CHECK(LS1046ARDBState, (obj), TYPE_LS1046ARDB_MACHINE)
+
+typedef struct {
+    /*< private >*/
+    MachineState parent;
+
+    /*< public >*/
+    FslLS1046AState soc;
+    MemoryRegion ram;
+    bool secure;
+} LS1046ARDBState;
+
 /* No need to do any particular setup for secondary boot */
 static void ls1046ardb_write_secondary(ARMCPU *cpu,
                                        const struct arm_boot_info *info)
@@ -191,11 +199,9 @@ static void ls1046ardb_init(MachineState *machine)
         .loader_start = FSL_LS1046A_MMDC_ADDR,
         /* No board ID, we boot from DT tree */
         .board_id = -1,
-        /* EL2 / EL3 not support */
-        .secure_boot = true
     };
 
-    struct LS1046ARDB *vms = g_new0(struct LS1046ARDB, 1);
+    LS1046ARDBState *ms = LS1046ARDB_MACHINE(machine);
     MemoryRegion *address_space_mem = get_system_memory();
     I2CBus *smbus;
     DriveInfo *di;
@@ -211,32 +217,37 @@ static void ls1046ardb_init(MachineState *machine)
         exit(1);
     }
 
-    object_initialize(&vms->soc, sizeof(vms->soc), TYPE_FSL_LS1046A);
-    object_property_add_child(OBJECT(machine), "soc", OBJECT(&vms->soc),
+    object_initialize(&ms->soc, sizeof(ms->soc), TYPE_FSL_LS1046A);
+    object_property_add_child(OBJECT(machine), "soc", OBJECT(&ms->soc),
                               &error_abort);
 
-    object_property_set_bool(OBJECT(&vms->soc), true, "realized", &err);
+    object_property_set_bool(OBJECT(&ms->soc), ms->secure, "secure", &err);
+    if (err != NULL) {
+        error_report("%s", error_get_pretty(err));
+        exit(1);
+    }
+    object_property_set_bool(OBJECT(&ms->soc), true, "realized", &err);
     if (err != NULL) {
         error_report("%s", error_get_pretty(err));
         exit(1);
     }
 
-    memory_region_allocate_system_memory(&vms->ram, NULL, "ls1046ardb.ram",
+    memory_region_allocate_system_memory(&ms->ram, NULL, "ls1046ardb.ram",
                                          machine->ram_size);
     memory_region_add_subregion(address_space_mem, FSL_LS1046A_MMDC_ADDR,
-                                &vms->ram);
+                                &ms->ram);
 
     sysbus_create_simple("ls1.cpld", FSL_LS1046A_CPLD_ADDR, NULL);
 
     /* Initialize EEPROMs */
-    smbus = (I2CBus *)qdev_get_child_bus(DEVICE(&vms->soc.i2cs[0]), "i2c-bus.0");
+    smbus = (I2CBus *)qdev_get_child_bus(DEVICE(&ms->soc.i2cs[0]), "i2c-bus.0");
     ls1_spd_init(smbus);
     ls1046ardb_eeprom_init(smbus, 0x52, eeprom_data, sizeof(eeprom_data));
 
     /* Create and plug in the SD cards */
     di = drive_get_next(IF_SD);
     blk = di ? blk_by_legacy_dinfo(di) : NULL;
-    bus = qdev_get_child_bus(DEVICE(&vms->soc), "sd-bus");
+    bus = qdev_get_child_bus(DEVICE(&ms->soc), "sd-bus");
     if (bus == NULL) {
         error_report("No SD bus found in SOC object");
         exit(1);
@@ -249,20 +260,63 @@ static void ls1046ardb_init(MachineState *machine)
     ls1_binfo.kernel_filename = machine->kernel_filename;
     ls1_binfo.kernel_cmdline = machine->kernel_cmdline;
     ls1_binfo.initrd_filename = machine->initrd_filename;
+    ls1_binfo.secure_boot = ms->secure,
     ls1_binfo.nb_cpus = smp_cpus;
     ls1_binfo.write_secondary_boot = ls1046ardb_write_secondary;
     ls1_binfo.secondary_cpu_reset_hook = ls1046ardb_reset_secondary;
 
     if (!qtest_enabled()) {
-        arm_load_kernel(&vms->soc.cpus[0], &ls1_binfo);
+        arm_load_kernel(&ms->soc.cpus[0], &ls1_binfo);
     }
 }
 
-static void ls1046ardb_machine_init(MachineClass *mc)
+static bool ls1046ardb_secure_get(Object *obj, Error **errp)
 {
+    LS1046ARDBState *ms = LS1046ARDB_MACHINE(obj);
+
+    return ms->secure;
+}
+
+static void ls1046ardb_secure_set(Object *obj, bool value, Error **errp)
+{
+    LS1046ARDBState *ms = LS1046ARDB_MACHINE(obj);
+
+    ms->secure = value;
+}
+
+static void ls1046ardb_instance_init(Object *obj)
+{
+    LS1046ARDBState *ms = LS1046ARDB_MACHINE(obj);
+
+    ms->secure = true;
+    object_property_add_bool(obj, "secure", ls1046ardb_secure_get,
+                             ls1046ardb_secure_set, NULL);
+    object_property_set_description(obj, "secure",
+                                    "Set on/off to enable/disable the ARM "
+                                    "Security Extensions (TrustZone)",
+                                    NULL);
+}
+
+static void ls1046ardb_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
     mc->desc = "Freescale LS1046A Reference Design Board (Cortex A72)";
     mc->init = ls1046ardb_init;
     mc->max_cpus = FSL_LS1046A_NUM_CPUS;
 }
 
-DEFINE_MACHINE("ls1046ardb", ls1046ardb_machine_init)
+static void ls1046ardb_machine_init(void)
+{
+    static TypeInfo ls1046ardb_tinfo = {
+        .name = TYPE_LS1046ARDB_MACHINE,
+        .parent = TYPE_MACHINE,
+        .instance_init = ls1046ardb_instance_init,
+        .instance_size = sizeof(LS1046ARDBState),
+        .class_init = ls1046ardb_class_init,
+    };
+
+    type_register_static(&ls1046ardb_tinfo);
+}
+
+type_init(ls1046ardb_machine_init)

@@ -188,9 +188,9 @@ static void fsl_ls1046a_realize(DeviceState *dev, Error **errp)
         }
 
         object_property_set_bool(OBJECT(&s->cpus[i]),
-                                 true, "has_el3", NULL);
+                                 s->secure, "has_el3", NULL);
         object_property_set_bool(OBJECT(&s->cpus[i]),
-                                 true, "has_el2", NULL);
+                                 s->secure, "has_el2", NULL);
         object_property_set_bool(OBJECT(&s->cpus[i]), true, "realized", &err);
         if (err) {
             error_propagate(errp, err);
@@ -372,13 +372,18 @@ static void fsl_ls1046a_realize(DeviceState *dev, Error **errp)
     memory_region_add_subregion(get_system_memory(), FSL_LS1046A_BMSP_ADDR, mr);
 }
 
+static Property fsl_ls1046a_properties[] = {
+    DEFINE_PROP_BOOL("secure", FslLS1046AState, secure, true),
+    DEFINE_PROP_END_OF_LIST()
+};
+
 static void fsl_ls1046a_class_init(ObjectClass *oc, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(oc);
 
+    dc->desc = "Freescale QorIQ LS1046A SoC";
     dc->realize = fsl_ls1046a_realize;
-
-    dc->desc = "Freescale QorIQ LS1046A SOC";
+    dc->props = fsl_ls1046a_properties;
 }
 
 static const TypeInfo fsl_ls1046a_type_info = {
