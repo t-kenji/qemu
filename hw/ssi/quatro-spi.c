@@ -21,10 +21,10 @@
 #include "qemu/fifo8.h"
 #include "qemu/log.h"
 
-#define TYPE_QUATRO_FCSPI "quatro5500.fcspi"
+#define TYPE_QUATRO_FCSPI "quatro5500-fcspi"
 #define QUATRO_FCSPI(obj) OBJECT_CHECK(QuatroFCSPIState, (obj), TYPE_QUATRO_FCSPI)
 
-#define TYPE_QUATRO_SPI "quatro5500.spi"
+#define TYPE_QUATRO_SPI "quatro5500-spi"
 #define QUATRO_SPI(obj) OBJECT_CHECK(QuatroSPIState, (obj), TYPE_QUATRO_SPI)
 
 #define FIFO_CAPACITY (256)

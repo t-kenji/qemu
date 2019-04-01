@@ -23,13 +23,16 @@
 #include "exec/address-spaces.h"
 #include "qemu/log.h"
 
+//#define WITH_CPU
 //#define USING_RAM
 
-#define TYPE_QUATRO_CM3 "quatro5500.cm3"
+#define TYPE_QUATRO_CM3 "quatro5500-cm3"
 #define QUATRO_CM3(obj) OBJECT_CHECK(QuatroCM3State, (obj), TYPE_QUATRO_CM3)
 
 enum QuatroCM3MemoryMap {
+#if defined(WITH_CPU)
     QUATRO_CM3_MEM_SIZE = 0x1400000,
+#endif
     QUATRO_CM3_MMIO_SIZE = 0x10000,
 };
 
@@ -38,10 +41,12 @@ typedef struct {
     SysBusDevice parent_obj;
 
     /*< public >*/
+#if defined(WITH_CPU)
     ARMCPU cpu;
     NVICState nvic;
 #if defined(USING_RAM)
     MemoryRegion container;
+#endif
 #endif
     MemoryRegion iomem;
 } QuatroCM3State;
@@ -74,6 +79,7 @@ static void quatro_cm3_reset(DeviceState *dev)
 
 static void quatro_cm3_realize(DeviceState *dev, Error **errp)
 {
+#if defined(WITH_CPU)
     QuatroCM3State *s = QUATRO_CM3(dev);
 
     s->cpu.env.nvic = &s->nvic;
@@ -99,6 +105,7 @@ static void quatro_cm3_realize(DeviceState *dev, Error **errp)
     memory_region_add_subregion(&s->container, 0xE000E000,
                                 sysbus_mmio_get_region(sbd, 0));
 #endif
+#endif
 }
 
 static void quatro_cm3_init(Object *obj)
@@ -111,18 +118,22 @@ static void quatro_cm3_init(Object *obj)
 
     QuatroCM3State *s = QUATRO_CM3(obj);
 
+#if defined(WITH_CPU)
 #if defined(USING_RAM)
     memory_region_init_ram(&s->container, obj, "quatro-cm3.container",
                            QUATRO_CM3_MEM_SIZE, &error_abort);
 #endif
+#endif
     memory_region_init_io(&s->iomem, obj, &ops, s,
                           TYPE_QUATRO_CM3, QUATRO_CM3_MMIO_SIZE);
     sysbus_init_mmio(SYS_BUS_DEVICE(obj), &s->iomem);
+#if defined(WITH_CPU)
     object_initialize(&s->cpu, sizeof(s->cpu), ARM_CPU_TYPE_NAME("cortex-m3"));
 
     sysbus_init_child_obj(obj, "nvic", &s->nvic, sizeof(s->nvic), TYPE_NVIC);
     object_property_add_alias(obj, "num-irq",
                               OBJECT(&s->nvic), "num-irq", &error_abort);
+#endif
 }
 
 static void quatro_cm3_class_init(ObjectClass *oc, void *data)

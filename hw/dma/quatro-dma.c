@@ -20,7 +20,7 @@
 
 #define ENABLE_DEBUG
 
-#define TYPE_QUATRO_GPDMA "quatro5500.gpdma"
+#define TYPE_QUATRO_GPDMA "quatro5500-gpdma"
 #define QUATRO_GPDMA(obj) OBJECT_CHECK(QuatroGPDMAState, (obj), TYPE_QUATRO_GPDMA)
 
 enum QuatroGPDMAMemoryMap {

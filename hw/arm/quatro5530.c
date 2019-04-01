@@ -54,15 +54,17 @@ void quatro5530_sdhci_init(CsrQuatroState *s, int port_num)
 
         DriveInfo *di = drive_get_next(IF_SD);
         BlockBackend *blk = di ? blk_by_legacy_dinfo(di) : NULL;
-        DeviceState *carddev = qdev_create(qdev_get_child_bus(dev, "sd-bus"), TYPE_SD_CARD);
-        qdev_prop_set_drive(carddev, "drive", blk, &error_abort);
-        qdev_init_nofail(carddev);
+        if (blk != NULL) {
+            DeviceState *carddev = qdev_create(qdev_get_child_bus(dev, "sd-bus"), TYPE_SD_CARD);
+            qdev_prop_set_drive(carddev, "drive", blk, &error_abort);
+            qdev_init_nofail(carddev);
+        }
     }
 }
 
 void quatro5530_fcspi_init(CsrQuatroState *s, hwaddr addr)
 {
-    DeviceState *dev = qdev_create(NULL, "quatro5500.fcspi");
+    DeviceState *dev = qdev_create(NULL, "quatro5500-fcspi");
     qdev_init_nofail(dev);
 
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
@@ -82,7 +84,7 @@ void quatro5530_fcspi_init(CsrQuatroState *s, hwaddr addr)
 
 void quatro5530_spi_init(CsrQuatroState *s, hwaddr addr)
 {
-    DeviceState *dev = qdev_create(NULL, "quatro5500.spi");
+    DeviceState *dev = qdev_create(NULL, "quatro5500-spi");
     qdev_init_nofail(dev);
 
     sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
@@ -185,10 +187,10 @@ static void quatro5530_init(MachineState *machine)
     quatro5530_spi_init(&ms->soc, CSR_QUATRO_SPI_ADDR);
     quatro5530_stmmac_init(&ms->soc);
 
-    sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM30_ADDR, NULL);
-    sysbus_create_simple("quatro5500.cm3", CSR_QUATRO_CM31_ADDR, NULL);
+    sysbus_create_simple("quatro5500-cm3", CSR_QUATRO_CM30_ADDR, NULL);
+    sysbus_create_simple("quatro5500-cm3", CSR_QUATRO_CM31_ADDR, NULL);
 
-    memory_region_allocate_system_memory(&ms->ram, NULL, "csr-quatro5530.ram",
+    memory_region_allocate_system_memory(&ms->ram, NULL, "quatro5530-ram",
                                          machine->ram_size);
     memory_region_add_subregion(get_system_memory(),
                                 CSR_QUATRO_DDR_RAM_ADDR, &ms->ram);
@@ -206,6 +208,8 @@ static void quatro5530_machine_class_init(MachineClass *mc)
     mc->default_cpus = DEFAULT_CPUS;
     mc->default_ram_size = GiB(1);
     mc->block_default_type = IF_SD;
+    mc->no_floppy = true;
+    mc->no_cdrom = true;
 }
 
 DEFINE_MACHINE("quatro5530", quatro5530_machine_class_init)

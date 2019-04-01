@@ -21,13 +21,13 @@
 
 //#define ENABLE_DEBUG
 
-#define TYPE_QUATRO_CLK "quatro5500.clk"
+#define TYPE_QUATRO_CLK "quatro5500-clk"
 #define QUATRO_CLK(obj) OBJECT_CHECK(QuatroClkState, (obj), TYPE_QUATRO_CLK)
 
-#define TYPE_QUATRO_RTC "quatro5500.rtc"
+#define TYPE_QUATRO_RTC "quatro5500-rtc"
 #define QUATRO_RTC(obj) OBJECT_CHECK(QuatroRTCState, (obj), TYPE_QUATRO_RTC)
 
-#define TYPE_QUATRO_HRT0 "quatro5500.hrt0"
+#define TYPE_QUATRO_HRT0 "quatro5500-hrt0"
 #define QUATRO_HRT0(obj) OBJECT_CHECK(QuatroHRT0State, (obj), TYPE_QUATRO_HRT0)
 
 enum QuatroTimerMemoryMap {

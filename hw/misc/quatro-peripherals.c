@@ -20,46 +20,46 @@
 
 //#define ENABLE_DEBUG
 
-#define TYPE_QUATRO_A15GPF "quatro5500.a15gpf"
+#define TYPE_QUATRO_A15GPF "quatro5500-a15gpf"
 #define QUATRO_A15GPF(obj) OBJECT_CHECK(QuatroA15GPFState, (obj), TYPE_QUATRO_A15GPF)
 
-#define TYPE_QUATRO_RSTGEN "quatro5500.rstgen"
+#define TYPE_QUATRO_RSTGEN "quatro5500-rstgen"
 #define QUATRO_RSTGEN(obj) OBJECT_CHECK(QuatroRstGenState, (obj), TYPE_QUATRO_RSTGEN)
 
-#define TYPE_QUATRO_DDRMC "quatro5500.ddrmc"
+#define TYPE_QUATRO_DDRMC "quatro5500-ddrmc"
 #define QUATRO_DDRMC(obj) OBJECT_CHECK(QuatroDDRMCState, (obj), TYPE_QUATRO_DDRMC)
 
-#define TYPE_QUATRO_SDIOCORE "quatro5500.sdiocore"
+#define TYPE_QUATRO_SDIOCORE "quatro5500-sdiocore"
 #define QUATRO_SDIOCORE(obj) OBJECT_CHECK(QuatroSDIOCoreState, (obj), TYPE_QUATRO_SDIOCORE)
 
-#define TYPE_QUATRO_SDMCLK "quatro5500.sdmclk"
+#define TYPE_QUATRO_SDMCLK "quatro5500-sdmclk"
 #define QUATRO_SDMCLK(obj) OBJECT_CHECK(QuatroSDMClkState, (obj), TYPE_QUATRO_SDMCLK)
 
-#define TYPE_QUATRO_TTC "quatro5500.ttc"
+#define TYPE_QUATRO_TTC "quatro5500-ttc"
 #define QUATRO_TTC(obj) OBJECT_CHECK(QuatroTTCState, (obj), TYPE_QUATRO_TTC)
 
-#define TYPE_QUATRO_SBE "quatro5500.sbe"
+#define TYPE_QUATRO_SBE "quatro5500-sbe"
 #define QUATRO_SBE(obj) OBJECT_CHECK(QuatroSBEState, (obj), TYPE_QUATRO_SBE)
 
-#define TYPE_QUATRO_FIR "quatro5500.fir"
+#define TYPE_QUATRO_FIR "quatro5500-fir"
 #define QUATRO_FIR(obj) OBJECT_CHECK(QuatroFIRState, (obj), TYPE_QUATRO_FIR)
 
-#define TYPE_QUATRO_SCAL "quatro5500.scal"
+#define TYPE_QUATRO_SCAL "quatro5500-scal"
 #define QUATRO_SCAL(obj) OBJECT_CHECK(QuatroSCALState, (obj), TYPE_QUATRO_SCAL)
 
-#define TYPE_QUATRO_SCRN "quatro5500.scrn"
+#define TYPE_QUATRO_SCRN "quatro5500-scrn"
 #define QUATRO_SCRN(obj) OBJECT_CHECK(QuatroSCRNState, (obj), TYPE_QUATRO_SCRN)
 
-#define TYPE_QUATRO_LPRI "quatro5500.lpri"
+#define TYPE_QUATRO_LPRI "quatro5500-lpri"
 #define QUATRO_LPRI(obj) OBJECT_CHECK(QuatroLPRIState, (obj), TYPE_QUATRO_LPRI)
 
-#define TYPE_QUATRO_JBIG "quatro5500.jbig"
+#define TYPE_QUATRO_JBIG "quatro5500-jbig"
 #define QUATRO_JBIG(obj) OBJECT_CHECK(QuatroJBIGState, (obj), TYPE_QUATRO_JBIG)
 
-#define TYPE_QUATRO_LCDC "quatro5500.lcdc"
+#define TYPE_QUATRO_LCDC "quatro5500-lcdc"
 #define QUATRO_LCDC(obj) OBJECT_CHECK(QuatroLCDCState, (obj), TYPE_QUATRO_LCDC)
 
-#define TYPE_QUATRO_DSP "quatro5500.dsp"
+#define TYPE_QUATRO_DSP "quatro5500-dsp"
 #define QUATRO_DSP(obj) OBJECT_CHECK(QuatroDSPState, (obj), TYPE_QUATRO_DSP)
 
 enum QuatroPeripheralMemoryMap {
