@@ -1506,7 +1506,7 @@ static void handle_hint(DisasContext *s, uint32_t insn,
         break;
     case 0b00100: /* SEV */
     case 0b00101: /* SEVL */
-        /* we treat all as NOP at least for now */
+        s->base.is_jmp = DISAS_SEV;
         break;
     case 0b00111: /* XPACLRI */
         if (s->pauth_active) {
@@ -14499,6 +14499,10 @@ static void aarch64_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
         case DISAS_WFE:
             gen_a64_set_pc_im(dc->pc);
             gen_helper_wfe(cpu_env);
+            break;
+        case DISAS_SEV:
+            gen_a64_set_pc_im(dc->pc);
+            gen_helper_sev(cpu_env);
             break;
         case DISAS_YIELD:
             gen_a64_set_pc_im(dc->pc);

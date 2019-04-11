@@ -19,12 +19,29 @@
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
-#define TYPE_XHCI "base-xhci"
+#ifndef HW_USB_HCD_XHCI_H
+#define HW_USB_HCD_XHCI_H
+
+#include "sysemu/dma.h"
+#include "hw/usb.h"
+#include "hw/pci/pci.h"
+#include "hw/sysbus.h"
+
+#define TYPE_PCI_XHCI "pci-xhci-usb"
+#define PCI_XHCI(obj) OBJECT_CHECK(XHCIPCIState, (obj), TYPE_PCI_XHCI)
+
 #define TYPE_NEC_XHCI "nec-usb-xhci"
 #define TYPE_QEMU_XHCI "qemu-xhci"
 
-#define XHCI(obj) \
-    OBJECT_CHECK(XHCIState, (obj), TYPE_XHCI)
+#define TYPE_SYS_BUS_XHCI "sysbus-xhci-usb"
+#define SYS_BUS_XHCI(obj) \
+    OBJECT_CHECK(XHCISysBusState, (obj), TYPE_SYS_BUS_XHCI)
+#define SYS_BUS_XHCI_CLASS(klass) \
+    OBJECT_CLASS_CHECK(XHCISysBusClass, (klass), TYPE_SYS_BUS_XHCI)
+#define SYS_BUS_XHCI_GET_CLASS(obj) \
+    OBJECT_GET_CLASS(XHCISysBusClass, (obj), TYPE_SYS_BUS_XHCI)
+
+#define TYPE_QUATRO5500_XHCI "quatro5500-xhci-usb"
 
 #define MAXPORTS_2 15
 #define MAXPORTS_3 15
@@ -39,6 +56,9 @@
 typedef struct XHCIState XHCIState;
 typedef struct XHCIStreamContext XHCIStreamContext;
 typedef struct XHCIEPContext XHCIEPContext;
+typedef struct XHCIPCIState XHCIPCIState;
+typedef struct XHCISysBusClass XHCISysBusClass;
+typedef struct XHCISysBusState XHCISysBusState;
 
 enum xhci_flags {
     XHCI_FLAG_SS_FIRST = 1,
@@ -180,12 +200,12 @@ typedef struct XHCIInterrupter {
 } XHCIInterrupter;
 
 struct XHCIState {
-    /*< private >*/
-    PCIDevice parent_obj;
-    /*< public >*/
-
     USBBus bus;
+    DeviceState *device;
+    qemu_irq irq;
     MemoryRegion mem;
+    AddressSpace *as;
+    PCIDevice *pci;
     MemoryRegion mem_cap;
     MemoryRegion mem_oper;
     MemoryRegion mem_runtime;
@@ -198,8 +218,6 @@ struct XHCIState {
     uint32_t numslots;
     uint32_t flags;
     uint32_t max_pstreams_mask;
-    OnOffAuto msi;
-    OnOffAuto msix;
 
     /* Operational Registers */
     uint32_t usbcmd;
@@ -225,3 +243,43 @@ struct XHCIState {
 
     bool nec_quirks;
 };
+
+extern const VMStateDescription vmstate_xhci;
+
+void usb_xhci_init(XHCIState *xhci, DeviceState *dev);
+void usb_xhci_realize(XHCIState *xhci, DeviceState *dev, Error **errp);
+void usb_xhci_unrealize(XHCIState *xhci, DeviceState *dev, Error **errp);
+void usb_xhci_reset(XHCIState *xhci);
+bool xhci_get_flag(XHCIState *xhci, enum xhci_flags bit);
+void xhci_set_flag(XHCIState *xhci, enum xhci_flags bit);
+
+struct XHCIPCIState {
+    /*< private >*/
+    PCIDevice pci_dev;
+    /*< public >*/
+
+    XHCIState xhci;
+
+    /* properties */
+    OnOffAuto msi;
+    OnOffAuto msix;
+};
+
+struct XHCISysBusState {
+    /*< private >*/
+    SysBusDevice parent_obj;
+    /*< public >*/
+
+    XHCIState xhci;
+};
+
+struct XHCISysBusClass {
+    /*< privaet >*/
+    SysBusDeviceClass parent_class;
+    /*< public >*/
+
+    uint32_t numports_2;
+    uint32_t numports_3;
+};
+
+#endif /* HW_USB_HCD_XHCI_H */

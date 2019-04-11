@@ -92,6 +92,9 @@ config ARM_SMMUV3
 config FSL_IMX6UL
     bool
 
+config FSL_LS1
+    bool
+
 config NRF51_SOC
     bool
 
@@ -121,4 +124,7 @@ config ARMSSE_MHU
     bool
 
 config MUSCA
+    bool
+
+config QUATRO
     bool
