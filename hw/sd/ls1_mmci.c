@@ -28,10 +28,17 @@
 #include "hw/sd/ls1_mmci.h"
 #include "qemu/log.h"
 
-//#define ENABLE_DEBUG
+#define ENABLE_DEBUG
 
 #define TYPE_LS1_MMCI_BUS "ls1-mmci-bus"
 #define LS1_MMCI_BUS(obj) OBJECT_CHECK(SDBus, (obj), TYPE_LS1_MMCI_BUS)
+
+#if defined(ENABLE_DEBUG)
+#define DEBUG(type, format, ...) qemu_log("%s: " format "\n", TYPE_LS1_##type, ##__VA_ARGS__)
+#else
+#define DEBUG(type, format, ...)
+#endif
+#define ERROR(type, format, ...) qemu_log_mask(LOG_GUEST_ERROR, "%s: " format "\n", TYPE_LS1_##type, ##__VA_ARGS__)
 
 #define REG_DSADDR_BLKATTR2 (0x000)
 #define REG_BLKATTR (0x004)
@@ -470,15 +477,6 @@
 #define SDHC_TRANSFER_DELAY             100
 #define SDHC_ADMA_DESCS_PER_DELAY       5
 
-#define REG_FMT TARGET_FMT_plx
-
-#if defined(ENABLE_DEBUG)
-#define DEBUG(type, format, ...) qemu_log("%s: " format "\n", TYPE_LS1_##type, ##__VA_ARGS__)
-#else
-#define DEBUG(type, format, ...)
-#endif
-
-
 static bool ls1_mmci_vmstate_validate(void *opaque, int version_id)
 {
     LS1MMCIState *s = opaque;
@@ -786,7 +784,7 @@ static void ls1_mmci_adma_transfer(LS1MMCIState *s)
         s->admaes &= ~(1 << BIT_ADMAES_ADMALME);
 
         ls1_mmci_adma_description(s, &desc);
-        DEBUG(MMCI, "ADMA loop: addr=" REG_FMT ", len=%d, attr=%x",
+        DEBUG(MMCI, "ADMA loop: addr=%#" HWADDR_PRIx ", len=%d, attr=%x",
               desc.addr, desc.length, desc.attr);
 
         if ((desc.attr & SDHC_ADMA_ATTR_VALID) == 0) {
@@ -952,20 +950,19 @@ static void ls1_mmci_data_transfer(void *opaque)
         }
         case VAL_PROCTL_DMAS_ADMA1:
             if (!PICK_HOSTCAPBLT_ADMAS(s->hostcapblt)) {
-                hw_error("%s: ADMA1 not supported\n", __func__);
+                ERROR(MMCI, "ADMA1 not supported");
             }
             ls1_mmci_adma_transfer(s);
             break;
         case VAL_PROCTL_DMAS_ADMA2_32:
             if (!PICK_HOSTCAPBLT_ADMAS(s->hostcapblt)) {
-                hw_error("%s: ADMA2 not supported\n", __func__);
+                ERROR(MMCI, "ADMA2 not supported");
             }
             ls1_mmci_adma_transfer(s);
             break;
         default:
-            hw_error("%s: Unsupported DMA type %d\n", __func__,
-                     PICK_PROCTL_DMAS(s->proctl));
-            break;
+            ERROR(MMCI, "Unsupported DMA type %d", PICK_PROCTL_DMAS(s->proctl));
+            return;
         }
     } else {
         s->prsstat |= (1 << BIT_PRSSTAT_DLA) | (1 << BIT_PRSSTAT_CDIHB);
@@ -1114,8 +1111,8 @@ static uint64_t ls1_mmci_read(void *opaque, hwaddr offset, unsigned size)
         value = s->wml;
         break;
     case REG_FEVT:
-        hw_error("%s: %s is not implemented\n", __func__, get_reg_name(offset));
-        break;
+        ERROR(MMCI, "%s is not implemented", get_reg_name(offset));
+        return 0;
     case REG_ADMAES:
         value = s->admaes;
         break;
@@ -1127,8 +1124,8 @@ static uint64_t ls1_mmci_read(void *opaque, hwaddr offset, unsigned size)
         break;
     case REG_DMAERRADDR:
     case REG_DMAERRATTR:
-        hw_error("%s: %s is not implemented\n", __func__, get_reg_name(offset));
-        break;
+        ERROR(MMCI, "%s is not implemented", get_reg_name(offset));
+        return 0;
     case REG_HOSTCAPBLT2:
         value = s->hostcapblt2;
         break;
@@ -1136,14 +1133,14 @@ static uint64_t ls1_mmci_read(void *opaque, hwaddr offset, unsigned size)
     case REG_TBPTR:
     case REG_SDDIRCTL:
     case REG_SDCLKCTL:
-        hw_error("%s: %s is not implemented\n", __func__, get_reg_name(offset));
-        break;
+        ERROR(MMCI, "%s is not implemented\n", get_reg_name(offset));
+        return 0;
     case REG_ESDHCCTL:
         value = s->esdhcctl;
         break;
     default:
-        //hw_error("%s: Bad offset " REG_FMT "\n", __func__, offset);
-        break;
+        ERROR(MMCI, "Bad read offset %#" HWADDR_PRIx, offset);
+        return 0;
     }
     DEBUG(MMCI, "Read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
           value, get_reg_name(offset), offset);
@@ -1245,8 +1242,7 @@ static void ls1_mmci_write(void *opaque,
         s->esdhcctl = value & MSK_ESDHCCTL;
         break;
     default:
-        hw_error("%s: Bad offset " REG_FMT " (value %" PRIx64 ")\n",
-                 __func__, offset, value);
+        ERROR(MMCI, "Bad write offset %#" HWADDR_PRIx " (value %#" PRIx64 ")", offset, value);
         break;
     }
     DEBUG(MMCI, "Write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
