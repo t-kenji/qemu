@@ -777,7 +777,7 @@ static void ls1_mmci_adma_description(LS1MMCIState *s, ADMADesc *desc)
 static void ls1_mmci_adma_transfer(LS1MMCIState *s)
 {
     uint32_t length, data_size;
-    ADMADesc desc;
+    ADMADesc desc = {0};
     int i;
 
     for (i = 0; i < SDHC_ADMA_DESCS_PER_DELAY; ++i) {
