@@ -58,9 +58,9 @@ enum CsrQuatroMemoryMap {
     CSR_QUATRO_HRT1_ADDR     = 0x04040020,
     CSR_QUATRO_SDMCLK_ADDR   = 0x04050000,
 
-    CSR_QUATRO_UART0_ADDR    = 0x040B0010,
-    CSR_QUATRO_UART1_ADDR    = 0x04160010,
-    CSR_QUATRO_UART2_ADDR    = 0x052C0010,
+    CSR_QUATRO_UART0_ADDR    = 0x040B0000,
+    CSR_QUATRO_UART1_ADDR    = 0x04160000,
+    CSR_QUATRO_UART2_ADDR    = 0x052C0000,
 
     CSR_QUATRO_FCSPI_ADDR    = 0x04110000,
     CSR_QUATRO_A7MPCORE_ADDR = 0x04300000,
@@ -122,6 +122,7 @@ typedef struct {
     ARMCPU ap_cpus[CSR_QUATRO_NUM_AP_CPUS];
     A15MPPrivState a7mpcore;
     MemoryRegion sram;
+    MemoryRegion mr_uarts[CSR_QUATRO_NUM_UARTS];
 } CsrQuatroState;
 
 #endif /* __CSR_QUATRO_5500_H__ */

@@ -23,15 +23,30 @@
 #define TYPE_QUATRO_GPDMA "quatro5500-gpdma"
 #define QUATRO_GPDMA(obj) OBJECT_CHECK(QuatroGPDMAState, (obj), TYPE_QUATRO_GPDMA)
 
-enum QuatroGPDMAMemoryMap {
+#if defined(ENABLE_DEBUG)
+#define DEBUG(format, ...)                                              \
+    do {                                                                \
+        qemu_log("%s: " format "\n", TYPE_QUATRO_GPDMA, ##__VA_ARGS__); \
+    } while (0)
+#else
+#define DEBUG(format, ...) \
+    do {} while (0)
+#endif
+#define ERROR(format, ...)                                 \
+    do {                                                   \
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: " format "\n", \
+                      TYPE_QUATRO_GPDMA, ##__VA_ARGS__);   \
+    } while (0)
+
+enum {
     QUATRO_GPDMA_MMIO_SIZE = 0x10000,
 };
 
 typedef struct {
     /*< parent >*/
     SysBusDevice parent_obj;
-
     /*< public >*/
+
     MemoryRegion iomem;
 } QuatroGPDMAState;
 
@@ -44,30 +59,15 @@ static const VMStateDescription quatro_gpdma_vmstate = {
     },
 };
 
-#if defined(ENABLE_DEBUG)
-#define DEBUGLOG(format, ...)                 \
-    do {                                      \
-        qemu_log(format "\n", ##__VA_ARGS__); \
-    } while (0)
-#else
-#define DEBUGLOG(format, ...)
-#endif
-#define ERRORLOG(format, ...)                                       \
-    do {                                                            \
-        qemu_log_mask(LOG_GUEST_ERROR, format "\n", ##__VA_ARGS__); \
-    } while (0)
-
 static uint64_t quatro_gpdma_read(void *opaque, hwaddr offset, unsigned size)
 {
-    DEBUGLOG("%s: Bad read offset %#" HWADDR_PRIx,
-             TYPE_QUATRO_GPDMA, offset);
+    DEBUG("Bad read offset %#" HWADDR_PRIx, offset);
     return 0;
 }
 
 static void quatro_gpdma_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
 {
-    DEBUGLOG("%s: Bad write %" PRIx64 " to offset %#" HWADDR_PRIx,
-             TYPE_QUATRO_GPDMA, value, offset);
+    DEBUG("Bad write %" PRIx64 " to offset %#" HWADDR_PRIx, value, offset);
     return;
 }
 

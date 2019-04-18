@@ -147,9 +147,16 @@ static void csr_quatro_realize(DeviceState *dev, Error **errp)
             {CSR_QUATRO_UART1_ADDR, CSR_QUATRO_UART1_IRQ},
             {CSR_QUATRO_UART2_ADDR, CSR_QUATRO_UART2_IRQ},
         };
+
+        char name[32];
+        snprintf(name, sizeof(name), "quatro5500-uart%d", i);
+        memory_region_init_ram(&ms->mr_uarts[i], OBJECT(dev), name, 0x100,
+                               &error_abort);
+        memory_region_add_subregion(get_system_memory(), uarts[i].addr,
+                                    &ms->mr_uarts[i]);
         if (serial_hd(i)) {
-            serial_mm_init(get_system_memory(),
-                           uarts[i].addr, 0,
+            serial_mm_init(&ms->mr_uarts[i],
+                           0x10, 0,
                            qdev_get_gpio_in(DEVICE(&ms->a7mpcore), uarts[i].irq),
                            115200, serial_hd(i), DEVICE_LITTLE_ENDIAN);
         }

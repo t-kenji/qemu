@@ -103,9 +103,9 @@ static const QuatroPeriReg quatro_a15gpf_regs[] = {
 
 enum QuatroRstGenRegs {
     PAD_INTERNAL,
+    POWER_ISO,
     POWER_CTRL,
     POWER_STAT,
-    POWER_ISO,
     QUATRO_RSTGEN_NUM_REGS
 };
 

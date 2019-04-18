@@ -17,15 +17,34 @@
 #include "qemu/osdep.h"
 #include "hw/sysbus.h"
 #include "hw/ssi/ssi.h"
+#include "hw/misc/gen-reg.h"
 #include "sysemu/dma.h"
 #include "qemu/fifo8.h"
 #include "qemu/log.h"
+
+//#define ENABLE_DEBUG
 
 #define TYPE_QUATRO_FCSPI "quatro5500-fcspi"
 #define QUATRO_FCSPI(obj) OBJECT_CHECK(QuatroFCSPIState, (obj), TYPE_QUATRO_FCSPI)
 
 #define TYPE_QUATRO_SPI "quatro5500-spi"
 #define QUATRO_SPI(obj) OBJECT_CHECK(QuatroSPIState, (obj), TYPE_QUATRO_SPI)
+
+#if defined(ENABLE_DEBUG)
+#define DEBUG(type, format, ...)                     \
+    do {                                             \
+        qemu_log("%s: " format "\n",                 \
+                 TYPE_QUATRO_##type, ##__VA_ARGS__); \
+    } while (0)
+#else
+#define DEBUG(type, format, ...) \
+    do {} while (0)
+#endif
+#define ERROR(type, format, ...)                           \
+    do {                                                   \
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: " format "\n", \
+                      TYPE_QUATRO_##type, ##__VA_ARGS__);  \
+    } while (0)
 
 #define FIFO_CAPACITY (256)
 
@@ -54,15 +73,6 @@ enum QuatroSPIBits {
     SPIDCTL__NA = 8,
 };
 
-typedef struct {
-    const char *name;
-    hwaddr offset;
-    uint32_t reset_value;
-} QuatroSPIReg;
-
-#define REG_ITEM(index, offset, reset_value) \
-    [index] = {#index, (offset), (reset_value)}
-
 enum QuatroFCSPIRegs {
     CTRL,
     STAT,
@@ -83,24 +93,24 @@ enum QuatroFCSPIRegs {
     DMA_SPARE,
 };
 
-static const QuatroSPIReg quatro_fcspi_regs[] = {
-    REG_ITEM(CTRL,      0x0000, 0x00000000),
-    REG_ITEM(STAT,      0x0004, 0x00000008),
-    REG_ITEM(ACCRR0,    0x0008, 0x00000000),
-    REG_ITEM(ACCRR1,    0x000C, 0x00000000),
-    REG_ITEM(ACCRR2,    0x0010, 0x00000000),
-    REG_ITEM(DDPM,      0x0014, 0x00000000),
-    REG_ITEM(RWDATA,    0x0018, 0x00000000),
-    REG_ITEM(FFSTAT,    0x001C, 0x00000000),
-    REG_ITEM(DEFMEM,    0x0020, 0x00000000),
-    REG_ITEM(EXADDR,    0x0024, 0x00000000),
-    REG_ITEM(MEMSPEC,   0x0028, 0x0020BA20),
-    REG_ITEM(DMA_SADDR, 0x0800, 0x00000000),
-    REG_ITEM(DMA_FADDR, 0x0804, 0x00000000),
-    REG_ITEM(DMA_LEN,   0x0808, 0x00000000),
-    REG_ITEM(DMA_CST,   0x080C, 0x00000000),
-    REG_ITEM(DMA_DEBUG, 0x0810, 0x00000000),
-    REG_ITEM(DMA_SPARE, 0x0814, 0x00000000),
+static const RegDef32 quatro_fcspi_regs[] = {
+    REG_ITEM(CTRL,      0x0000, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(STAT,      0x0004, 0x00000008, 0xFFFFFFFF),
+    REG_ITEM(ACCRR0,    0x0008, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(ACCRR1,    0x000C, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(ACCRR2,    0x0010, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DDPM,      0x0014, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(RWDATA,    0x0018, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(FFSTAT,    0x001C, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DEFMEM,    0x0020, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(EXADDR,    0x0024, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(MEMSPEC,   0x0028, 0x0020BA20, 0xFFFFFFFF),
+    REG_ITEM(DMA_SADDR, 0x0800, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DMA_FADDR, 0x0804, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DMA_LEN,   0x0808, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DMA_CST,   0x080C, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DMA_DEBUG, 0x0810, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(DMA_SPARE, 0x0814, 0x00000000, 0xFFFFFFFF),
 };
 
 enum QuatroSPIRegs {
@@ -123,33 +133,31 @@ enum QuatroSPIRegs {
     SPIINT,
 };
 
-static const QuatroSPIReg quatro_spi_regs[] = {
-    REG_ITEM(SPIERR,    0x0000, 0x00000000),
-    REG_ITEM(SPICLK0,   0x0010, 0x00000000),
-    REG_ITEM(SPICLK1,   0x0014, 0x00000000),
-    REG_ITEM(SPIXCFG,   0x0018, 0x00000000),
-    REG_ITEM(SPICST,    0x001C, 0x00000000),
-    REG_ITEM(SPICFG0,   0x0020, 0x00000000),
-    REG_ITEM(SPICFG1,   0x0024, 0x00000000),
-    REG_ITEM(SPICFG2,   0x0028, 0x00000000),
-    REG_ITEM(SPICMD0,   0x0040, 0x00000000),
-    REG_ITEM(SPICMD1,   0x0044, 0x00000000),
-    REG_ITEM(SPICMD2,   0x0048, 0x00000000),
-    REG_ITEM(SPIDCTL,   0x0080, 0x00000000),
-    REG_ITEM(SPIDCMD,   0x0084, 0x00000000),
-    REG_ITEM(SPIDADDR,  0x0088, 0x00000000),
-    REG_ITEM(SPIRADDR,  0x008C, 0x00000000),
-    REG_ITEM(SPIDFIFO,  0x0090, 0x00000000),
-    REG_ITEM(SPIINT,    0x00A0, 0x00000000),
+static const RegDef32 quatro_spi_regs[] = {
+    REG_ITEM(SPIERR,    0x0000, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICLK0,   0x0010, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICLK1,   0x0014, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIXCFG,   0x0018, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICST,    0x001C, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICFG0,   0x0020, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICFG1,   0x0024, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICFG2,   0x0028, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICMD0,   0x0040, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICMD1,   0x0044, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPICMD2,   0x0048, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIDCTL,   0x0080, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIDCMD,   0x0084, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIDADDR,  0x0088, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIRADDR,  0x008C, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIDFIFO,  0x0090, 0x00000000, 0xFFFFFFFF),
+    REG_ITEM(SPIINT,    0x00A0, 0x00000000, 0xFFFFFFFF),
 };
-
-#undef REG_ITEM
 
 typedef struct {
     /*< private >*/
     SysBusDevice parent_obj;
-
     /*< public >*/
+
     MemoryRegion iomem;
     uint32_t regs[ARRAY_SIZE(quatro_fcspi_regs)];
     qemu_irq irq;
@@ -163,8 +171,8 @@ typedef struct {
 typedef struct {
     /*< private >*/
     SysBusDevice parent_obj;
-
     /*< public >*/
+
     MemoryRegion iomem;
     uint32_t regs[ARRAY_SIZE(quatro_spi_regs)];
     qemu_irq irq;
@@ -179,7 +187,8 @@ static const VMStateDescription quatro_fcspi_vmstate = {
     .version_id = 1,
     .minimum_version_id = 1,
     .fields = (VMStateField[]){
-        VMSTATE_UINT32_ARRAY(regs, QuatroFCSPIState, ARRAY_SIZE(quatro_fcspi_regs)),
+        VMSTATE_UINT32_ARRAY(regs, QuatroFCSPIState,
+                             ARRAY_SIZE(quatro_fcspi_regs)),
         VMSTATE_BOOL(irqstat, QuatroFCSPIState),
         VMSTATE_FIFO8(tx_fifo, QuatroFCSPIState),
         VMSTATE_FIFO8(rx_fifo, QuatroFCSPIState),
@@ -198,19 +207,6 @@ static const VMStateDescription quatro_spi_vmstate = {
         VMSTATE_END_OF_LIST()
     },
 };
-
-static int quatro_spi_offset_to_index(const QuatroSPIReg *regs,
-                                      int length,
-                                      hwaddr offset)
-{
-    for (int i = 0; i < length; ++i) {
-        if (regs[i].offset == offset) {
-            return i;
-        }
-    }
-
-    return -1;
-}
 
 static void quatro_fcspi_int_update(QuatroFCSPIState *s)
 {
@@ -273,7 +269,9 @@ static void quatro_fcspi_dma_transfer(QuatroFCSPIState *s)
             if (data_size > fifo8_num_used(&s->rx_fifo)) {
                 data_size = fifo8_num_used(&s->rx_fifo);
             }
-            const uint8_t *buf = fifo8_pop_buf(&s->rx_fifo, data_size, &data_size);
+            const uint8_t *buf = fifo8_pop_buf(&s->rx_fifo,
+                                               data_size,
+                                               &data_size);
             dma_memory_write(&address_space_memory, phys_addr,
                              buf, data_size);
             phys_addr += data_size;
@@ -297,73 +295,59 @@ static void quatro_fcspi_erase(QuatroFCSPIState *s)
         qemu_set_irq(s->cs_line, 1);
         break;
     case FCSPI_ACCRR1__ERASE_BLOCK:
+        ERROR(FCSPI, "Block erase not supported");
         break;
     case FCSPI_ACCRR1__ERASE_CHIP:
+        ERROR(FCSPI, "Chip erase not supported");
         break;
     default:
-        qemu_log_mask(LOG_GUEST_ERROR, "%s: unknown erase type %d\n",
-                      TYPE_QUATRO_FCSPI, s->regs[ACCRR1]);
-        break;
+        ERROR(FCSPI, "Unknown erase type %d", s->regs[ACCRR1]);
+        return;
     }
 }
 
 static uint64_t quatro_fcspi_read(void *opaque, hwaddr offset, unsigned size)
 {
     QuatroFCSPIState *s = QUATRO_FCSPI(opaque);
-    int index = quatro_spi_offset_to_index(quatro_fcspi_regs,
-                                           ARRAY_SIZE(quatro_fcspi_regs),
-                                           offset);
+    RegDef32 reg = regdef_find(quatro_fcspi_regs, offset);
 
-    if (index < 0) {
-        qemu_log("%s: Bad read offset %#" HWADDR_PRIx "\n",
-                 TYPE_QUATRO_FCSPI, offset);
+    if (reg.index < 0) {
+        ERROR(FCSPI, "Bad read offset %#" HWADDR_PRIx, offset);
         return 0;
     }
 
-    uint64_t value = s->regs[index];
-#if 0
-    qemu_log("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")\n",
-             TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
-#endif
+    uint64_t value = s->regs[reg.index];
+    DEBUG(FCSPI, "Read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
+          value, reg.name, offset);
     return value;
 }
 
-static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+static void quatro_fcspi_write(void *opaque,
+                               hwaddr offset,
+                               uint64_t value,
+                               unsigned size)
 {
     QuatroFCSPIState *s = QUATRO_FCSPI(opaque);
-    int index = quatro_spi_offset_to_index(quatro_fcspi_regs,
-                                           ARRAY_SIZE(quatro_fcspi_regs),
-                                           offset);
+    RegDef32 reg = regdef_find(quatro_fcspi_regs, offset);
 
-    switch (index) {
-    case CTRL:
-    case STAT:
-    case ACCRR0:
-        s->regs[ACCRR0] = (uint32_t)value;
-        break;
-    case ACCRR1:
-        s->regs[ACCRR1] = (uint32_t)value;
-        break;
+    if (reg.index < 0) {
+        ERROR(FCSPI, "Bad write offset %#" HWADDR_PRIx, offset);
+        return;
+    }
+
+    DEBUG(FCSPI, "Write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+          value, reg.name, offset);
+    if (!!(value & ~reg.write_mask)) {
+        ERROR(FCSPI, "Maybe write to a read only bit %#" PRIx64,
+              (value & ~reg.write_mask));
+    }
+
+    switch (reg.index) {
     case ACCRR2:
         s->regs[ACCRR2] = (uint32_t)value;
         if (s->regs[ACCRR2] & 2) {
             quatro_fcspi_erase(s);
         }
-        break;
-    case DDPM:
-    case RWDATA:
-    case FFSTAT:
-    case DEFMEM:
-    case EXADDR:
-    case MEMSPEC:
-    case DMA_SADDR:
-        s->regs[DMA_SADDR] = (uint32_t)value;
-        break;
-    case DMA_FADDR:
-        s->regs[DMA_FADDR] = (uint32_t)value;
-        break;
-    case DMA_LEN:
-        s->regs[DMA_LEN] = (uint32_t)value;
         break;
     case DMA_CST:
         s->regs[DMA_CST] = (uint32_t)value;
@@ -376,18 +360,10 @@ static void quatro_fcspi_write(void *opaque, hwaddr offset, uint64_t value, unsi
         }
         quatro_fcspi_int_update(s);
         break;
-    case DMA_DEBUG:
-    case DMA_SPARE:
-        break;
     default:
-        qemu_log("%s: Bad write offset %#" HWADDR_PRIx "\n",
-                 TYPE_QUATRO_FCSPI, offset);
-        return;
+        s->regs[reg.index] = (uint32_t)value;
+        break;
     }
-#if 0
-    qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
-             TYPE_QUATRO_FCSPI, value, quatro_fcspi_regs[index].name, offset);
-#endif
 }
 
 static void quatro_fcspi_reset(DeviceState *dev)
@@ -441,18 +417,15 @@ static void quatro_fcspi_class_init(ObjectClass *oc, void *data)
 static uint64_t quatro_spi_read(void *opaque, hwaddr offset, unsigned size)
 {
     QuatroSPIState *s = QUATRO_SPI(opaque);
-    int index = quatro_spi_offset_to_index(quatro_spi_regs,
-                                           ARRAY_SIZE(quatro_spi_regs),
-                                           offset);
+    RegDef32 reg = regdef_find(quatro_spi_regs, offset);
 
-    if (index < 0) {
-        qemu_log("%s Bad read offset %#" HWADDR_PRIx "\n",
-                 TYPE_QUATRO_SPI, offset);
+    if (reg.index < 0) {
+        ERROR(SPI, "Bad read offset %#" HWADDR_PRIx, offset);
         return 0;
     }
 
-    uint64_t value = s->regs[index];
-    switch (index) {
+    uint64_t value = s->regs[reg.index];
+    switch (reg.index) {
     case SPIDCTL:
         value |= fifo8_num_used(&s->rx_fifo);
         break;
@@ -460,31 +433,32 @@ static uint64_t quatro_spi_read(void *opaque, hwaddr offset, unsigned size)
         value = fifo8_pop(&s->rx_fifo);
         break;
     }
-#if 0
-    qemu_log("%s: read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")\n",
-             TYPE_QUATRO_SPI, value, quatro_spi_regs[index].name, offset);
-#endif
+    DEBUG(SPI, "Read %#" PRIx64 " from %s (offset %#" HWADDR_PRIx ")",
+          value, reg.name, offset);
     return value;
 }
 
-static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+static void quatro_spi_write(void *opaque,
+                             hwaddr offset,
+                             uint64_t value,
+                             unsigned size)
 {
     QuatroSPIState *s = QUATRO_SPI(opaque);
-    int index = quatro_spi_offset_to_index(quatro_spi_regs,
-                                           ARRAY_SIZE(quatro_spi_regs),
-                                           offset);
+    RegDef32 reg = regdef_find(quatro_spi_regs, offset);
 
-    switch (index) {
-    case SPIERR:
-    case SPICLK0:
-    case SPICLK1:
-    case SPIXCFG:
-    case SPICST:
-    case SPICFG0:
-    case SPICFG1:
-    case SPICFG2:
-        s->regs[index] = (uint32_t)value;
-        break;
+    if (reg.index < 0) {
+        ERROR(SPI, "Bad write offset %#" HWADDR_PRIx, offset);
+        return;
+    }
+
+    DEBUG(SPI, "Write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")",
+          value, reg.name, offset);
+    if (!!(value & ~reg.write_mask)) {
+        ERROR(SPI, "Maybe write to a read only bit %#" PRIx64,
+              (value & ~reg.write_mask));
+    }
+
+    switch (reg.index) {
     case SPICMD0:
         if (value & (1 << SPICMD__START)) {
             /* TODO: Cut out as a function. */
@@ -550,15 +524,8 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
             qemu_irq_raise(s->irq);
         }
         break;
-    case SPICMD1:
-    case SPICMD2:
-    case SPIDCTL:
-    case SPIDCMD:
-    case SPIDADDR:
-    case SPIRADDR:
-        s->regs[index] = (uint32_t)value;
-        break;
     case SPIDFIFO:
+        DEBUG(SPI, "Write size: %d", size);
         for (int i = 0; i < sizeof(s->regs[0]); ++i) {
             fifo8_push(&s->tx_fifo, (uint8_t)((value >>  (8 * i)) & 0xFF));
         }
@@ -570,14 +537,9 @@ static void quatro_spi_write(void *opaque, hwaddr offset, uint64_t value, unsign
         }
         break;
     default:
-        qemu_log("%s: Bad write offset %#" HWADDR_PRIx "\n",
-                 TYPE_QUATRO_SPI, offset);
-        return;
+        s->regs[reg.index] = (uint32_t)value;
+        break;
     }
-#if 0
-    qemu_log("%s: write %#" PRIx64 " to %s (offset %#" HWADDR_PRIx ")\n",
-             TYPE_QUATRO_SPI, value, quatro_spi_regs[index].name, offset);
-#endif
 }
 
 static void quatro_spi_reset(DeviceState *dev)
