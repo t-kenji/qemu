@@ -185,7 +185,7 @@ static const VMStateDescription quatro_hrt0_vmstate = {
 
 static uint64_t hrt_get_count(void)
 {
-    return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / 1000;
+    return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) / (1000000000 / SYSPLL_HED_CLOCK);
 }
 
 static uint64_t quatro_clk_read(void *opaque, hwaddr offset, unsigned size)
@@ -385,6 +385,9 @@ static uint64_t quatro_hrt0_read(void *opaque, hwaddr offset, unsigned size)
     case HRTCNT0H ... HRTCNT0L:
         {
             uint64_t counter = hrt_get_count() - s->counter_offset;
+            if (s->regs[HRTPRE0] > 0) {
+                counter /= s->regs[HRTPRE0];
+            }
             s->regs[HRTCNT0H] = (uint32_t)extract64(counter, 32, 32);
             s->regs[HRTCNT0L] = (uint32_t)extract64(counter, 0, 32);
         }
