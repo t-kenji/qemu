@@ -141,6 +141,9 @@
 cscope.*
 tags
 TAGS
+GPATH
+GRTAGS
+GTAGS
 docker-src.*
 *~
 *.ast_raw
