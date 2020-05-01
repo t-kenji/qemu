@@ -529,7 +529,7 @@ static inline int get_segment_6xx_tlb(CPUPPCState *env, mmu_ctx_t *ctx,
 
                 qemu_log("Page table: " TARGET_FMT_plx " len " TARGET_FMT_plx
                          "\n", ppc_hash32_hpt_base(cpu),
-                         ppc_hash32_hpt_mask(env) + 0x80);
+                         ppc_hash32_hpt_mask(cpu) + 0x80);
                 for (curaddr = ppc_hash32_hpt_base(cpu);
                      curaddr < (ppc_hash32_hpt_base(cpu)
                                 + ppc_hash32_hpt_mask(cpu) + 0x80);
@@ -1843,9 +1843,6 @@ static inline void dump_store_bat(CPUPPCState *env, char ID, int ul, int nr,
 void helper_store_ibatu(CPUPPCState *env, uint32_t nr, target_ulong value)
 {
     target_ulong mask;
-#if defined(FLUSH_ALL_TLBS)
-    PowerPCCPU *cpu = env_archcpu(env);
-#endif
 
     dump_store_bat(env, 'I', 0, nr, value);
     if (env->IBAT[0][nr] != value) {
@@ -1879,9 +1876,6 @@ void helper_store_ibatl(CPUPPCState *env, uint32_t nr, target_ulong value)
 void helper_store_dbatu(CPUPPCState *env, uint32_t nr, target_ulong value)
 {
     target_ulong mask;
-#if defined(FLUSH_ALL_TLBS)
-    PowerPCCPU *cpu = env_archcpu(env);
-#endif
 
     dump_store_bat(env, 'D', 0, nr, value);
     if (env->DBAT[0][nr] != value) {
@@ -1916,7 +1910,6 @@ void helper_store_601_batu(CPUPPCState *env, uint32_t nr, target_ulong value)
 {
     target_ulong mask;
 #if defined(FLUSH_ALL_TLBS)
-    PowerPCCPU *cpu = env_archcpu(env);
     int do_inval;
 #endif
 
@@ -1961,7 +1954,6 @@ void helper_store_601_batl(CPUPPCState *env, uint32_t nr, target_ulong value)
 #if !defined(FLUSH_ALL_TLBS)
     target_ulong mask;
 #else
-    PowerPCCPU *cpu = env_archcpu(env);
     int do_inval;
 #endif
 
