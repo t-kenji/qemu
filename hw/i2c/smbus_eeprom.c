@@ -24,6 +24,7 @@
 
 #include "qemu/osdep.h"
 #include "qemu/units.h"
+#include "qemu/crc16.h"
 #include "qapi/error.h"
 #include "hw/boards.h"
 #include "hw/i2c/i2c.h"
@@ -194,9 +195,9 @@ void smbus_eeprom_init(I2CBus *smbus, int nb_eeprom,
     }
 }
 
-/* Generate SDRAM SPD EEPROM data describing a module of type and size */
-uint8_t *spd_data_generate(enum sdram_type type, ram_addr_t ram_size,
-                           Error **errp)
+static uint8_t *spd_data_generate_ddr(enum sdram_type type,
+                                      ram_addr_t ram_size,
+                                      Error **errp)
 {
     uint8_t *spd;
     uint8_t nbanks;
@@ -319,4 +320,142 @@ uint8_t *spd_data_generate(enum sdram_type type, ram_addr_t ram_size,
         spd[63] += spd[i];
     }
     return spd;
+}
+
+static uint8_t *spd_data_generate_ddr3(ram_addr_t ram_size, Error **errp)
+{
+    uint8_t *spd;
+    uint8_t nbanks;
+    uint16_t density;
+    uint32_t size;
+    int min_log2 = 9, sz_log2;
+
+    size = ram_size >> 20; /* work in terms of megabytes */
+    if (size < 4) {
+        error_setg(errp, "SDRAM size is too small");
+        return NULL;
+    }
+    sz_log2 = 31 - clz32(size);
+    size = 1U << sz_log2;
+    if (ram_size > size * MiB) {
+        error_setg(errp, "SDRAM size 0x"RAM_ADDR_FMT" is not a power of 2, "
+                   "truncating to %u MB", ram_size, size);
+    }
+    if (sz_log2 < min_log2) {
+        error_setg(errp, "Memory size is too small for SDRAM type,");
+        return NULL;
+    }
+
+    nbanks = 2;
+    sz_log2 -= 1;
+    density = sz_log2 - 8;
+
+    spd = g_malloc0(256);
+    spd[0] = 0x92; /* Number of Serial PD Bytes Written / SPD Device Size / CRC Coverage */
+    spd[1] = 0x10; /* SPD Revision */
+    spd[2] = 0x0B; /* Key Byte / DRAM Device Type */
+    spd[3] = 0x02; /* Key Byte / Module type */
+    spd[4] = density & 0x0F; /* SDRAM Density and Banks */
+    spd[5] = 0x12; /* SDRAM Addressing */
+    spd[6] = 0x00; /* Module Nominal Voltage, VDD */
+    spd[7] = ((nbanks == 8) ? 0x40 : nbanks - 1) << 3 | 0x01; /* Module Organization */
+    spd[8] = 0x0B; /* Module Memory Bus Width */
+    spd[9] = 0x52; /* Fine Timebase (FTB) Dividend / Divisor */
+    spd[10] = 0x01; /* Medium Timebase (MTB) Dividend */
+    spd[11] = 0x08; /* Medium Timebase (MTB) Divisor */
+    spd[12] = 0x0C; /* SDRAM Minimum Cycle Time (tCKmin) */
+    spd[14] = 0x7C; /* CAS Latencles Supported, LSB */
+    spd[15] = 0x00; /* CAS Latencles Supported, MSB */
+    spd[16] = 0x6C; /* Minimum CAS Latency Time (tAAmin) */
+    spd[17] = 0x78; /* Minimum Write Recovery Time (tWRmin) */
+    spd[18] = 0x6C; /* Minimum RAS# to CAS# Delay Time (tRCDmin) */
+    spd[19] = 0x30; /* Minimum Row Active to Row Active Delay Time (tRRDmin) */
+    spd[20] = 0x6C; /* Minimum Row Precharge Delay Time (tRPmin) */
+    spd[21] = 0x11; /* Upper Nibbles for tRAS and tRC */
+    spd[22] = 0x20; /* Minimum Active to Precharge Delay Time (tRASmin), LSB */
+    spd[23] = 0x8C; /* Minimum Active to Active / Refresh Delay Time (tRCmin), LSB */
+    spd[24] = 0x70; /* Minimum Refresh Recovery Delay Time (tRFCmin), LSB */
+    spd[25] = 0x03; /* Minimum Refresh Recovery Delay Time (tRFCmin), MSB */
+    spd[26] = 0x3C; /* Minimum Internal Write to Read Command Delay Time (tWTRmin) */
+    spd[27] = 0x3C; /* Minimum Internal Read to Precharge Command Delay Time (tRTPmin) */
+    spd[28] = 0x00; /* Upper Nibble for tFAW */
+    spd[29] = 0xF0; /* Minimum Four Activate Window Delay Time (tFAWmin) */
+    spd[30] = 0x82; /* SDRAM Optional Feature */
+    spd[31] = 0x05; /* SDRAM Thermal and Refresh Options */
+    spd[32] = 0x80; /* Module Thermal Sensor */
+    spd[33] = 0x00; /* SDRAM Device Type */
+    spd[34] = 0x00; /* Fine Offset for SDRAM Minimum Cycle Time (tCKmin) */
+    spd[35] = 0x00; /* Fine Offset for Minimum CAS Latency Time (tAAmin) */
+    spd[36] = 0x00; /* Fine Offset for Minimum RAS# to CAS# Delay Time (tRCDmin) */
+    spd[37] = 0x00; /* Fine Offset for Minimum Row Precharge Delay Time (tRPmin) */
+    spd[38] = 0x00; /* Fine Offset for Minimum Active to Active / Refresh Delay Time (tRCmin) */
+    spd[41] = 0x06; /* SDRAM Maximum Activate Count (MAC) Value */
+    spd[60] = 0x03; /* Raw Card Extension, Module Nominal Height */
+    spd[61] = 0x11; /* Module Maximum Thickness */
+    spd[62] = 0x0B; /* Reference Raw Card Used */
+    spd[63] = 0x00; /* DIMM Module Attributes */
+    spd[64] = 0x00; /* RDIMM Thermal Heat Spreader Solution */
+    spd[65] = 0x04; /* Register Manufacturer ID Code, LSB */
+    spd[66] = 0xB3; /* Register Manufacturer ID Code, MSB */
+    spd[67] = 0x03; /* Register Revision Number */
+    spd[68] = 0x00; /* Register Type */
+    spd[69] = 0x00; /* RC1 (MS Nibble) / RC0 (LS Nibble) */
+    spd[70] = 0x50; /* RC3 (MS Nibble) / RC2 (LS Nibble) - Drive Strength, Command / Address */
+    spd[71] = 0x55; /* RC5 (MS Nibble) / RC4 (LS Nibble) - Drive Strength, Control and Clock */
+    spd[72] = 0x00; /* RC7 (MS Nibble) / RC6 (LS Nibble) */
+    spd[73] = 0x00; /* RC9 (MS Nibble) / RC8 (LS Nibble) */
+    spd[74] = 0x00; /* RC11 (MS Nibble) / RC10 (LS Nibble) */
+    spd[75] = 0x00; /* RC13 (MS Nibble) / RC12 (LS Nibble) */
+    spd[76] = 0x00; /* RC15 (MS Nibble) / RC14 (LS Nibble) */
+    uint16_t crc = crc16(spd, (spd[0] & 0x80) ? 117 : 125);
+    spd[117] = 0x80; /* Module ID: Module Manufacturer's JEDEC ID Code LSB */
+    spd[118] = 0x2C; /* Module ID: Module Manufacturer's JEDEC ID Code MSB */
+    spd[119] = 0x00; /* Module ID: Module Manufacturing Location */
+    spd[120] = 0x00; /* Module ID: Module Manufacturing Date (Year) */
+    spd[121] = 0x00; /* Module ID: Module Manufacturing Date (Week) */
+    spd[122] = 0x12; /* Module ID: Module Serial Number */
+    spd[123] = 0x34; /* Module ID: Module Serial Number */
+    spd[124] = 0x56; /* Module ID: Module Serial Number */
+    spd[125] = 0x78; /* Module ID: Module Serial Number */
+    spd[126] = (uint8_t)(crc & 0xFF); /* Cyclical Redundancy Code LSB */
+    spd[127] = (uint8_t)(crc >> 8); /* Cyclical Redundancy Code MSB */
+    spd[128] = 'Q';
+    spd[129] = 'E';
+    spd[130] = 'M';
+    spd[131] = 'U';
+    spd[132] = '-';
+    spd[133] = 'A';
+    spd[134] = 'B';
+    spd[135] = 'C';
+    spd[136] = 'D';
+    spd[137] = 'E';
+    spd[138] = 'F';
+    spd[139] = 'G';
+    spd[140] = 'H';
+    spd[141] = 'I';
+    spd[142] = 'J';
+    spd[143] = 'K';
+    spd[144] = 'L';
+    spd[145] = 'M';
+    spd[146] = 0x44;
+    spd[147] = 0x5A;
+    spd[148] = 0x80;
+    spd[149] = 0x2C;
+    return spd;
+}
+
+/* Generate SDRAM SPD EEPROM data describing a module of type and size */
+uint8_t *spd_data_generate(enum sdram_type type, ram_addr_t ram_size,
+                           Error **errp)
+{
+    switch (type) {
+    case SDR:
+    case DDR:
+    case DDR2:
+        return spd_data_generate_ddr(type, ram_size, errp);
+    case DDR3:
+        return spd_data_generate_ddr3(ram_size, errp);
+    default:
+        g_assert_not_reached();
+    }
 }
