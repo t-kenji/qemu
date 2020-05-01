@@ -4617,6 +4617,12 @@ static void gen_dcbtstep(DisasContext *ctx)
      */
 }
 
+/* dcblc */
+static void gen_dcblc(DisasContext *ctx)
+{
+    /* interpreted as no-op */
+}
+
 /* dcbtls */
 static void gen_dcbtls(DisasContext *ctx)
 {
@@ -7031,6 +7037,7 @@ GEN_HANDLER(dcbt, 0x1F, 0x16, 0x08, 0x00000001, PPC_CACHE),
 GEN_HANDLER_E(dcbtep, 0x1F, 0x1F, 0x09, 0x00000001, PPC_NONE, PPC2_BOOKE206),
 GEN_HANDLER(dcbtst, 0x1F, 0x16, 0x07, 0x00000001, PPC_CACHE),
 GEN_HANDLER_E(dcbtstep, 0x1F, 0x1F, 0x07, 0x00000001, PPC_NONE, PPC2_BOOKE206),
+GEN_HANDLER(dcblc, 0x1F, 0x06, 0x0C, 0x02000001, PPC_CACHE),
 GEN_HANDLER_E(dcbtls, 0x1F, 0x06, 0x05, 0x02000001, PPC_BOOKE, PPC2_BOOKE206),
 GEN_HANDLER(dcbz, 0x1F, 0x16, 0x1F, 0x03C00001, PPC_CACHE_DCBZ),
 GEN_HANDLER_E(dcbzep, 0x1F, 0x1F, 0x1F, 0x03C00001, PPC_NONE, PPC2_BOOKE206),
