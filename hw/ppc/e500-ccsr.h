@@ -9,6 +9,7 @@ typedef struct PPCE500CCSRState {
     /*< public >*/
 
     MemoryRegion ccsr_space;
+    MemoryRegion ccsr_space_alias;
 } PPCE500CCSRState;
 
 #define TYPE_CCSR "e500-ccsr"

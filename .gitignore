@@ -144,6 +144,7 @@ TAGS
 GPATH
 GRTAGS
 GTAGS
+/build
 docker-src.*
 *~
 *.ast_raw

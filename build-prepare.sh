@@ -72,8 +72,8 @@ $ROOTDIR/configure \\
     --enable-debug-tcg \\
     --enable-debug-info \\
     --enable-trace-backend=log \\
-    --enable-sdl \\
     --enable-gtk \\
+    --enable-spice \\
     --enable-vte \\
     --enable-fdt \\
     --enable-virtfs \\

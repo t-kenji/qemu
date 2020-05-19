@@ -82,3 +82,6 @@ common-obj-$(CONFIG_NRF51_SOC) += nrf51_rng.o
 obj-$(CONFIG_MAC_VIA) += mac_via.o
 
 common-obj-$(CONFIG_GRLIB) += grlib_ahb_apb_pnp.o
+
+common-obj-$(CONFIG_FSL) += fsl_quicc.o fsl_ifc.o
+common-obj-$(CONFIG_FSL_T1) += t1_ccsr.o

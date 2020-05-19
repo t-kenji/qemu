@@ -17,3 +17,6 @@ CONFIG_MAC_NEWWORLD=y
 
 # For PReP
 CONFIG_PREP=y
+
+# For T-Series
+CONFIG_FSL_T1=y

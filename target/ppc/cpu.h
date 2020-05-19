@@ -1553,6 +1553,7 @@ typedef PowerPCCPU ArchCPU;
 #define SPR_PCR               (0x152)
 #define SPR_BOOKE_LPIDR       (0x152)
 #define SPR_BOOKE_TCR         (0x154)
+#define SPR_BOOKE_MAS8        (0x155)
 #define SPR_BOOKE_TLB0PS      (0x158)
 #define SPR_BOOKE_TLB1PS      (0x159)
 #define SPR_BOOKE_TLB2PS      (0x15A)
@@ -1594,6 +1595,7 @@ typedef PowerPCCPU ArchCPU;
 #define SPR_Exxx_L1CFG0       (0x203)
 #define SPR_Exxx_L1CFG1       (0x204)
 #define SPR_Exxx_NPIDR        (0x205)
+#define SPR_L2CFG0            (0x207)
 #define SPR_ATBL              (0x20E)
 #define SPR_ATBU              (0x20F)
 #define SPR_IBAT0U            (0x210)
@@ -1656,6 +1658,7 @@ typedef PowerPCCPU ArchCPU;
 #define SPR_BOOKE_DSRR1       (0x23F)
 #define SPR_BOOKE_SPRG8       (0x25C)
 #define SPR_BOOKE_SPRG9       (0x25D)
+#define SPR_Exxx_L1CSR2       (0x25E)
 #define SPR_BOOKE_MAS0        (0x270)
 #define SPR_BOOKE_MAS1        (0x271)
 #define SPR_BOOKE_MAS2        (0x272)
@@ -1993,6 +1996,10 @@ typedef PowerPCCPU ArchCPU;
 #define   L1CSR1_ICLFR  0x00000100  /* I-Cache Lock Flash Reset */
 #define   L1CSR1_ICFI   0x00000002  /* Instruction Cache Flash Invalidate */
 #define   L1CSR1_ICE    0x00000001  /* Instruction Cache Enable */
+
+#define   L2CSR0_L2E    0x80000000  /* L2 Cache Enable */
+#define   L2CSR0_L2FI   0x00200000  /* L2 Cache Flash Invalidate */
+#define   L2CSR0_L2LFC  0x00000400  /* L2 Cache Lock Flash Clear */
 
 /* HID0 bits */
 #define HID0_DEEPNAP        (1 << 24)           /* pre-2.06 */

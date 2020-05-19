@@ -1674,6 +1674,15 @@ static void spr_write_e500_l1csr1(DisasContext *ctx, int sprn, int gprn)
     tcg_temp_free(t0);
 }
 
+static void spr_write_e500_l2csr0(DisasContext *ctx, int sprn, int gprn)
+{
+    TCGv t0 = tcg_temp_new();
+
+    tcg_gen_andi_tl(t0, cpu_gpr[gprn], L2CSR0_L2E);
+    gen_store_spr(sprn, t0);
+    tcg_temp_free(t0);
+}
+
 static void spr_write_booke206_mmucsr0(DisasContext *ctx, int sprn, int gprn)
 {
     gen_helper_booke206_tlbflush(cpu_env, cpu_gpr[gprn]);
@@ -4891,8 +4900,8 @@ static void init_proc_e500(CPUPPCState *env, int version)
     case fsl_e5500:
         env->dcache_line_size = 64;
         env->icache_line_size = 64;
-        l1cfg0 |= 0x1000000; /* 64 byte cache block size */
-        l1cfg1 |= 0x1000000; /* 64 byte cache block size */
+        l1cfg0 |= 0x800000; /* 64 byte cache block size */
+        l1cfg1 |= 0x800000; /* 64 byte cache block size */
         break;
     case fsl_e6500:
         env->dcache_line_size = 32;
@@ -4962,6 +4971,10 @@ static void init_proc_e500(CPUPPCState *env, int version)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_e500_l1csr1,
                  0x00000000);
+    spr_register(env, SPR_Exxx_L1CSR2, "L1CSR2",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
     spr_register(env, SPR_BOOKE_MCSRR0, "MCSRR0",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
@@ -4978,6 +4991,22 @@ static void init_proc_e500(CPUPPCState *env, int version)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, SPR_NOACCESS,
                  0x00000000);
+
+    if (version >= fsl_e500mc) {
+        spr_register(env, SPR_BOOKE_MAS8, "MAS8",
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     &spr_read_generic, &spr_write_generic32,
+                     0x00000000);
+        spr_register(env, SPR_L2CFG0, "L2CFG0",
+                     &spr_read_generic, SPR_NOACCESS,
+                     &spr_read_generic, SPR_NOACCESS,
+                     0x00000004);
+        spr_register(env, SPR_L2CR, "L2CSR0",
+                     SPR_NOACCESS, SPR_NOACCESS,
+                     &spr_read_generic, &spr_write_e500_l2csr0,
+                     0x00000000);
+    }
+
     /* XXX better abstract into Emb.xxx features */
     if ((version == fsl_e5500) || (version == fsl_e6500)) {
         spr_register(env, SPR_BOOKE_EPCR, "EPCR",

@@ -56,6 +56,15 @@ void nand_setio(DeviceState *dev, uint32_t value);
 uint32_t nand_getio(DeviceState *dev);
 uint32_t nand_getbuswidth(DeviceState *dev);
 
+/* onfi.c */
+DeviceState *onfi_init(BlockBackend *blk, int manf_id, int chip_id);
+void onfi_setpins(DeviceState *dev, uint8_t cle, uint8_t ale,
+                  uint8_t ce, uint8_t wp, uint8_t gnd);
+void onfi_getpins(DeviceState *dev, int *rb);
+void onfi_setio(DeviceState *dev, uint32_t value);
+uint32_t onfi_getio(DeviceState *dev);
+uint32_t onfi_getbuswidth(DeviceState *dev);
+
 #define NAND_MFR_TOSHIBA	0x98
 #define NAND_MFR_SAMSUNG	0xec
 #define NAND_MFR_FUJITSU	0x04

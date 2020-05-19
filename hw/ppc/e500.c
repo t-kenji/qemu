@@ -59,7 +59,7 @@
 #define RAM_SIZES_ALIGN            (64 * MiB)
 
 /* TODO: parameterize */
-#define MPC8544_CCSRBAR_SIZE       0x00100000ULL
+#define MPC8544_CCSRBAR_SIZE       0x01000000ULL
 #define MPC8544_MPIC_REGS_OFFSET   0x40000ULL
 #define MPC8544_MSI_REGS_OFFSET   0x41600ULL
 #define MPC8544_SERIAL0_REGS_OFFSET 0x4500ULL
@@ -1136,11 +1136,41 @@ void ppce500_init(MachineState *machine)
     boot_info->dt_size = dt_size;
 }
 
+#define CCSR_MMIO 1
+#if CCSR_MMIO == 1
+static uint64_t e500_ccsr_read(void *opaque, hwaddr offset, unsigned size)
+{
+    printf("%s: read offset %#" HWADDR_PRIx "\n",
+           __func__, offset);
+    return 0;
+}
+
+static void e500_ccsr_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+    printf("%s: write %#" PRIx64 " to offset %#" HWADDR_PRIx "\n",
+           __func__, value, offset);
+}
+#endif
+
 static void e500_ccsr_initfn(Object *obj)
 {
+#if CCSR_MMIO == 1
+    static const MemoryRegionOps ops = {
+        .read = e500_ccsr_read,
+        .write = e500_ccsr_write,
+        .endianness = DEVICE_BIG_ENDIAN,
+    };
+#endif
+
     PPCE500CCSRState *ccsr = CCSR(obj);
+#if CCSR_MMIO == 1
+    memory_region_init_io(&ccsr->ccsr_space, obj, &ops, ccsr,
+                          TYPE_CCSR, MPC8544_CCSRBAR_SIZE);
+    sysbus_init_mmio(SYS_BUS_DEVICE(obj), &ccsr->ccsr_space);
+#else
     memory_region_init(&ccsr->ccsr_space, obj, "e500-ccsr",
                        MPC8544_CCSRBAR_SIZE);
+#endif
 }
 
 static const TypeInfo e500_ccsr_info = {
