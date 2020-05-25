@@ -14,8 +14,6 @@
 #include "qemu/units.h"
 #include "qapi/error.h"
 #include "cpu.h"
-#include "e500.h"
-#include "e500-ccsr.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/block-backend.h"
 #include "sysemu/device_tree.h"
@@ -33,9 +31,15 @@
 #include "hw/i2c/i2c.h"
 #include "hw/i2c/smbus_eeprom.h"
 #include "elf.h"
+#include "e500.h"
+#include "e500-ccsr.h"
+#include "fsl-t1.h"
 
 #define TYPE_NUE1_MACHINE  MACHINE_TYPE_NAME("nue1")
 #define NUE1_MACHINE(obj) OBJECT_CHECK(Nue1MachineState, (obj), TYPE_NUE1_MACHINE)
+
+#define TYPE_NUE2_MACHINE  MACHINE_TYPE_NAME("nue2")
+#define NUE2_MACHINE(obj) OBJECT_CHECK(Nue2MachineState, (obj), TYPE_NUE2_MACHINE)
 
 typedef struct {
     PPCE500MachineState parent_obj;
@@ -43,8 +47,16 @@ typedef struct {
     uint32_t rcw[16];
 } Nue1MachineState;
 
+typedef struct {
+    /*< private >*/
+    MachineState parent_obj;
+
+    /*< public >*/
+    FslT102xState soc;
+    uint32_t rcw[16];
+} Nue2MachineState;
+
 #define EPAPR_MAGIC (0x45504150)
-#define SVR_T1014 (0x85440000)
 
 #define DTC_LOAD_PAD (0x1800000)
 #define DTC_PAD_MASK (0xFFFFF)
@@ -644,7 +656,6 @@ static void nue1_fixup_devtree(void *fdt)
 {
     const char model[] = "kuusou,nue1";
     const char compatible[] = "kuusou,nue1";
-printf("%s: called\n", __func__);
 
     qemu_fdt_setprop(fdt, "/", "model", model, sizeof(model));
     qemu_fdt_setprop(fdt, "/", "compatible", compatible,
@@ -740,7 +751,7 @@ static void nue1_instance_init(Object *obj)
     object_property_add_str(obj, "rcw", nue1_get_rcw,nue1_set_rcw, NULL);
 }
 
-static void nue1_machine_class_init(ObjectClass *oc, void *data)
+static void nue1_class_init(ObjectClass *oc, void *data)
 {
     PPCE500MachineClass *pmc = PPCE500_MACHINE_CLASS(oc);
     MachineClass *mc = MACHINE_CLASS(oc);
@@ -761,16 +772,187 @@ static void nue1_machine_class_init(ObjectClass *oc, void *data)
     mc->default_cpu_type = POWERPC_CPU_TYPE_NAME("e500mc");
 }
 
-static void nue_register_types(void)
+static void nue2_init(MachineState *machine)
 {
-    static const TypeInfo nue1_info = {
-        .name          = TYPE_NUE1_MACHINE,
-        .parent        = TYPE_PPCE500_MACHINE,
-        .class_init    = nue1_machine_class_init,
-        .instance_init = nue1_instance_init,
-        .instance_size = sizeof(Nue1MachineState),
+    Nue2MachineState *nms = NUE2_MACHINE(machine);
+    MemoryRegion *address_space_mem = get_system_memory();
+    MemoryRegion *ram = g_new(MemoryRegion, 1);
+    Object *obj;
+    SSIBus *spi;
+    I2CBus *i2c;
+
+    /* Fixup Memory size on a alignment boundary */
+    ram_size &= ~(RAM_SIZES_ALIGN - 1);
+    machine->ram_size = ram_size;
+
+    object_initialize_child(OBJECT(nms), "soc", &nms->soc, sizeof(nms->soc),
+                            TYPE_FSL_T102X, &error_abort, NULL);
+    object_property_set_uint(OBJECT(&nms->soc), SVR_T1024,
+                             "svr", &error_abort);
+    qdev_prop_set_ptr(DEVICE(&nms->soc), "rcw", nms->rcw);
+    object_property_set_bool(OBJECT(&nms->soc), true,
+                             "realized", &error_abort);
+
+    /* Register Memory */
+    memory_region_allocate_system_memory(ram, NULL, "t102x.ram", ram_size);
+    memory_region_add_subregion(address_space_mem, 0, ram);
+
+    obj = object_resolve_path_component(OBJECT(&nms->soc), "espi");
+    spi = (SSIBus *)qdev_get_child_bus(DEVICE(obj), "spi");
+    if (spi != NULL) {
+        DeviceState *nand = ssi_create_slave_no_init(spi, "spi-nand");
+
+        qdev_prop_set_drive(nand, "drive", blk_by_name("spi-nand"),
+                            &error_fatal);
+        qdev_prop_set_uint8(nand, "manufacturer_id", NAND_MFR_MICRON);
+        qdev_prop_set_uint8(nand, "device_id", 0x35);
+        qdev_init_nofail(nand);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(obj), 1,
+                           qdev_get_gpio_in_named(nand, SSI_GPIO_CS, 0));
+    }
+
+    /* SPD EEPROM on RAM module */
+    obj = object_resolve_path_component(OBJECT(&nms->soc), "i2c");
+    i2c = (I2CBus *)qdev_get_child_bus(DEVICE(obj), "i2c");
+    if (i2c != NULL) {
+        uint8_t *spd_data = spd_data_generate(DDR3, ram_size, &error_abort);
+        smbus_eeprom_init_one(i2c, 0x51, spd_data);
+    }
+
+    char *filename;
+    const char *payload_name;
+    hwaddr bios_entry = 0;
+    uint64_t loadaddr;
+    PPCBootInfo *bi = nms->soc.cpus[0].env.load_info;
+
+    if (bios_name == NULL) {
+        error_report("%s: u-boot-spl.bin not found!", TYPE_NUE2_MACHINE);
+        exit(1);
+    } else {
+        payload_name = bios_name;
+    }
+
+    loadaddr = FSL_T102X__UBOOT_SPL_ENTRY;
+    bios_entry = FSL_T102X__RESET_VECTOR_ADDRESS;
+
+    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, payload_name);
+
+    rom_add_file_fixed(filename, loadaddr, -1);
+
+    g_free(filename);
+
+    bi->entry = bios_entry;
+}
+
+static char *nue2_get_rcw(Object *obj, Error **errp)
+{
+    Nue2MachineState *ms = NUE2_MACHINE(obj);
+    char *rcw_str = g_malloc0(256);
+    size_t cur = 0;
+
+    for (int i = 0; i < ARRAY_SIZE(ms->rcw); i += 4) {
+        cur += snprintf(rcw_str + cur, 255 - cur, "%08x %08x %08x %08x\n",
+                       ms->rcw[i], ms->rcw[i + 1],
+                       ms->rcw[i + 2], ms->rcw[i + 3]);
+    }
+
+    return rcw_str;
+}
+
+static void nue2_set_rcw(Object *obj, const char *value, Error **errp)
+{
+    static char buf[1024] = {0};
+
+    Nue2MachineState *ms = NUE2_MACHINE(obj);
+    int fd;
+
+    fd = open(value, O_RDONLY);
+    if (fd < 0) {
+        error_report("RCW: cannot open %s", value);
+        return;
+    }
+
+    ssize_t read_len = read(fd, buf, sizeof(buf));
+    if (read_len <= 0) {
+        error_report("RCW: cannot read %s", value);
+    } else {
+        char *head = buf, *cur = strchr(head, '\n');
+        int count = 0;
+        while (cur != NULL) {
+            *cur = '\0';
+
+            if (*head != '#') {
+                char *next;
+                uint32_t value;
+                while (head != NULL) {
+                    next = get_token(head);
+                    value = strtoul(head, NULL, 16);
+                    ++count;
+                    if (count > 2) {
+                        ms->rcw[count - 3] = value;
+                    }
+                    head = next;
+                }
+            }
+
+            head = cur + 1;
+            cur = strchr(head, '\n');
+        }
+    }
+
+    close(fd);
+}
+
+
+static void nue2_instance_init(Object *obj)
+{
+    Nue2MachineState *ms = NUE2_MACHINE(obj);
+
+    /* Default rcw is T1024RDB default */
+    static const uint32_t t1024rdb_spi_rcw[ARRAY_SIZE(ms->rcw)] = {
+        0x0810000C, 0x00000000, 0x00000000, 0x00000000,
+        0x4A800003, 0x80000012, 0x5C027000, 0x21000000,
+        0x00000000, 0x00000000, 0x00000000, 0x00030810,
+        0x00000000, 0x0B005A08, 0x00000000, 0x00000006,
+
     };
 
-    type_register_static(&nue1_info);
+    memcpy(ms->rcw, t1024rdb_spi_rcw, sizeof(ms->rcw));
+    object_property_add_str(obj, "rcw", nue2_get_rcw,nue2_set_rcw, NULL);
+}
+
+static void nue2_class_init(ObjectClass *oc, void *data)
+{
+    MachineClass *mc = MACHINE_CLASS(oc);
+
+    mc->init = nue2_init;
+    mc->max_cpus = FSL_T102X__NUM_CPUS;
+    mc->default_cpu_type = POWERPC_CPU_TYPE_NAME("e500mc"); /* FIXME: to e5500 */
+    mc->desc = "仮想/鵺2 Board";
+}
+
+static void nue_register_types(void)
+{
+    static const TypeInfo info[] = {
+        {
+            .name          = TYPE_NUE1_MACHINE,
+            .parent        = TYPE_PPCE500_MACHINE,
+            .class_init    = nue1_class_init,
+            .instance_init = nue1_instance_init,
+            .instance_size = sizeof(Nue1MachineState),
+        },
+        {
+            .name          = TYPE_NUE2_MACHINE,
+            .parent        = TYPE_MACHINE,
+            .class_init    = nue2_class_init,
+            .instance_init = nue2_instance_init,
+            .instance_size = sizeof(Nue2MachineState),
+        },
+    };
+
+    for (int i = 0; i < ARRAY_SIZE(info); ++i) {
+        type_register_static(&info[i]);
+    }
 }
 type_init(nue_register_types)

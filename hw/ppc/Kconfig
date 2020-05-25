@@ -128,9 +128,11 @@ config XIVE_KVM
     default y
     depends on XIVE_SPAPR && KVM
 
-config FSL_T1
+config TSERIES
     bool
-    select FSL
+    select QUICC
+    select DPAA
+    select IFC
     select NAND
-    select SERIAL
     select SSI_NAND
+    select SERIAL

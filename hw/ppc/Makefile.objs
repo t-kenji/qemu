@@ -33,4 +33,4 @@ obj-$(CONFIG_E500) += mpc8544_guts.o ppce500_spin.o
 # PowerPC 440 Xilinx ML507 reference board.
 obj-$(CONFIG_VIRTEX) += virtex_ml507.o
 # Freescale T-Series
-obj-$(CONFIG_FSL_T1) += t1rdb.o nue.o
+obj-$(CONFIG_TSERIES) += fsl-t1.o t1rdb.o nue.o

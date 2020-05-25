@@ -83,5 +83,6 @@ obj-$(CONFIG_MAC_VIA) += mac_via.o
 
 common-obj-$(CONFIG_GRLIB) += grlib_ahb_apb_pnp.o
 
-common-obj-$(CONFIG_FSL) += fsl_quicc.o fsl_ifc.o
-common-obj-$(CONFIG_FSL_T1) += t1_ccsr.o
+common-obj-$(CONFIG_QUICC) += fsl_quicc.o
+common-obj-$(CONFIG_IFC) += fsl_ifc.o
+obj-$(CONFIG_TSERIES) += t1_peripherals.o

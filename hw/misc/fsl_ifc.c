@@ -9,7 +9,7 @@
 #include "qemu/log.h"
 
 #define ENABLE_DEBUG
-#define DEBUG_IFC 1
+#define DEBUG_IFC 0
 
 enum IFCMemorySize {
     IFC_MMIO_SIZE = 0x2000,
@@ -565,7 +565,7 @@ static void fsl_ifc_realize(DeviceState *dev, Error **errp)
     /* NAND device */
     s->nand = onfi_init(blk_by_name("nand"), NAND_MFR_MICRON, 0xAC);
 #endif
-    memory_region_init_ram(&s->sram, OBJECT(s), "sram",
+    memory_region_init_ram(&s->sram, OBJECT(s), "ifc-sram",
                            IFC_SRAM_SIZE, &error_fatal);
     s->sram_ptr = memory_region_get_ram_ptr(&s->sram);
 
